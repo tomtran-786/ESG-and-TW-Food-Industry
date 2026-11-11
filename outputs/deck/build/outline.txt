@@ -1,0 +1,22 @@
+ 1. [-           ] Tighter financing goes with lower ESG scores in Taiwan’s food industry
+ 2. [-           ] Higher financial constraints go with lower ESG scores, supporting H1, but only as a between-firm pattern tied to firm size
+ 3. [Introduction] ESG research asks whether ESG pays; whether a firm’s finances shape its ESG is much less studied
+ 4. [Introduction] Two theories predict opposite signs for the same coefficient, so the data must decide
+ 5. [Methods     ] The panel keeps 219 of 250 rows: 22 are 2015 lag inputs and only 9 fail the sample rules
+ 6. [Methods     ] The outcome is the TESG score and constraints are measured by the SA index, built from size and age
+ 7. [Methods     ] The model follows the Hausman rule, uses firm-clustered errors and is stress-tested four ways
+ 8. [Results     ] Most variation lies between firms: 83% of TESG and 96% of SA variance
+ 9. [Results     ] The link lives between firms: r = −0.39 across firm means, +0.02 once firm and year effects are removed
+10. [Results     ] Tests do not reject random effects, and the fixed-effects SA estimate is three times less precise
+11. [Results     ] A one-unit rise in the SA index goes with a 4.8-point lower TESG score (p = 0.0498)
+12. [Results     ] The sign holds in all four checks; only the main model (5%) and the lagged index (10%) are significant
+13. [Results     ] The association sits in the social pillar (−8.27, p = 0.002); E and G are not significant
+14. [Discussion  ] The result fits the discretionary-cost view and repeats the size sensitivity seen in earlier Taiwan work
+15. [Discussion  ] Read it as an association between firms, not as a causal effect of constraints on ESG
+16. [Discussion  ] Constrained firms score lower on ESG, so low scores may partly reflect tight finance
+17. [Appendix    ] A. TESG averages 60.5 (SD 9.2) and the SA index is negative in all 219 observations
+18. [Appendix    ] B. No pair of variables exceeds |r| = 0.7; SA and SIZE correlate at −0.59
+19. [Appendix    ] C. Hausman (p = 0.816) and Mundlak (p = 0.776) tests do not reject random effects
+20. [Appendix    ] D. Every variable is built from TEJ fields as defined here
+21. [Appendix    ] E. The 24 sample firms: 19 have ten observations, 3 have nine and 2 enter only in 2025
+22. [Appendix    ] F. Average TESG rose to 62.1 by 2022 and fell back to 59.6 in 2025; scores before 2021 are retrospective

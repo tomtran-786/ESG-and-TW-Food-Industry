@@ -1,0 +1,464 @@
+<html><head><meta charset='utf-8'><style>body{font-family:Georgia,serif;margin:2em}table.t{border-collapse:collapse;border-top:2px solid #000;border-bottom:2px solid #000}table.t th,table.t td{padding:3px 10px;text-align:right}table.t thead tr{border-bottom:1px solid #000}table.t th:first-child,table.t td:first-child{text-align:left}.n{font-size:.85em;max-width:60em}</style></head><body><h2>Table 5: Robustness Checks (TWSE Food Firms, 2016-2025)</h2><h3>Table 5</h3><table class="dataframe t">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>(1) Model 1 (main)</th>
+      <th>(2) §5.1 SA dummy</th>
+      <th>(3) §5.3 Lagged SA</th>
+      <th>(4) §5.4 Model 2 (+ SIZE)</th>
+    </tr>
+    <tr>
+      <th>Dependent variable: TESG score</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>SA Index</th>
+      <td>2.2446</td>
+      <td></td>
+      <td></td>
+      <td>4.8422</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(14.0318)</td>
+      <td></td>
+      <td></td>
+      <td>(21.9100)</td>
+    </tr>
+    <tr>
+      <th>SA dummy (above sample median)</th>
+      <td></td>
+      <td>-3.1017</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <th></th>
+      <td></td>
+      <td>(3.3611)</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <th>SA Index (t-1)</th>
+      <td></td>
+      <td></td>
+      <td>10.5037</td>
+      <td></td>
+    </tr>
+    <tr>
+      <th></th>
+      <td></td>
+      <td></td>
+      <td>(11.6490)</td>
+      <td></td>
+    </tr>
+    <tr>
+      <th>SIZE</th>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>0.7757</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>(5.8313)</td>
+    </tr>
+    <tr>
+      <th>ROA</th>
+      <td>1.0480</td>
+      <td>2.8622</td>
+      <td>-1.4096</td>
+      <td>1.1189</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(11.3189)</td>
+      <td>(12.9682)</td>
+      <td>(10.8114)</td>
+      <td>(11.2300)</td>
+    </tr>
+    <tr>
+      <th>LEV</th>
+      <td>-8.8515</td>
+      <td>-9.7379</td>
+      <td>-8.8851</td>
+      <td>-9.0183</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(6.0898)</td>
+      <td>(6.3437)</td>
+      <td>(5.2368)</td>
+      <td>(5.8062)</td>
+    </tr>
+    <tr>
+      <th>TQ</th>
+      <td>0.7927</td>
+      <td>0.3912</td>
+      <td>0.8139</td>
+      <td>0.7964</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(2.0121)</td>
+      <td>(1.6815)</td>
+      <td>(2.0104)</td>
+      <td>(2.0146)</td>
+    </tr>
+    <tr>
+      <th>GROWTH</th>
+      <td>-3.5995</td>
+      <td>-3.6387</td>
+      <td>-4.2584</td>
+      <td>-3.5975</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(2.4772)</td>
+      <td>(2.6810)</td>
+      <td>(2.7502)</td>
+      <td>(2.4831)</td>
+    </tr>
+    <tr>
+      <th>CASH</th>
+      <td>7.3289</td>
+      <td>6.7705</td>
+      <td>6.5484</td>
+      <td>6.8713</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(6.6367)</td>
+      <td>(6.4186)</td>
+      <td>(6.5103)</td>
+      <td>(6.5032)</td>
+    </tr>
+    <tr>
+      <th>Firm effects</th>
+      <td>Fixed</td>
+      <td>Fixed</td>
+      <td>Fixed</td>
+      <td>Fixed</td>
+    </tr>
+    <tr>
+      <th>Year FE</th>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <th>Observations</th>
+      <td>219</td>
+      <td>219</td>
+      <td>219</td>
+      <td>219</td>
+    </tr>
+    <tr>
+      <th>Firms (G used for t(G-1))</th>
+      <td>24 (22)</td>
+      <td>24 (22)</td>
+      <td>24 (22)</td>
+      <td>24 (22)</td>
+    </tr>
+    <tr>
+      <th>Within R²</th>
+      <td>0.053</td>
+      <td>0.076</td>
+      <td>0.066</td>
+      <td>0.054</td>
+    </tr>
+    <tr>
+      <th>Overall R²</th>
+      <td>-0.444</td>
+      <td>-0.134</td>
+      <td>-2.398</td>
+      <td>-0.443</td>
+    </tr>
+    <tr>
+      <th>FC variable: p-value, t(G-1)</th>
+      <td>0.874</td>
+      <td>0.367</td>
+      <td>0.377</td>
+      <td>0.827</td>
+    </tr>
+    <tr>
+      <th>FC variable: p-value, wild cluster bootstrap</th>
+      <td>0.887</td>
+      <td>0.492</td>
+      <td>0.437</td>
+      <td>0.847</td>
+    </tr>
+  </tbody>
+</table><h3>Table 5 RE</h3><table class="dataframe t">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>(1) Model 1 (main)</th>
+      <th>(2) §5.1 SA dummy</th>
+      <th>(3) §5.3 Lagged SA</th>
+      <th>(4) §5.4 Model 2 (+ SIZE)</th>
+    </tr>
+    <tr>
+      <th>Dependent variable: TESG score (random effects)</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>SA Index</th>
+      <td>-4.8048**</td>
+      <td></td>
+      <td></td>
+      <td>-2.5187</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(2.3200)</td>
+      <td></td>
+      <td></td>
+      <td>(2.1808)</td>
+    </tr>
+    <tr>
+      <th>SA dummy (above sample median)</th>
+      <td></td>
+      <td>-4.0163</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <th></th>
+      <td></td>
+      <td>(2.9038)</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <th>SA Index (t-1)</th>
+      <td></td>
+      <td></td>
+      <td>-3.7454*</td>
+      <td></td>
+    </tr>
+    <tr>
+      <th></th>
+      <td></td>
+      <td></td>
+      <td>(1.8545)</td>
+      <td></td>
+    </tr>
+    <tr>
+      <th>SIZE</th>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>2.2222</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>(1.8079)</td>
+    </tr>
+    <tr>
+      <th>ROA</th>
+      <td>3.9950</td>
+      <td>6.7802</td>
+      <td>4.6188</td>
+      <td>4.2620</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(10.6927)</td>
+      <td>(11.2280)</td>
+      <td>(10.7384)</td>
+      <td>(10.4834)</td>
+    </tr>
+    <tr>
+      <th>LEV</th>
+      <td>-7.3271</td>
+      <td>-7.4877</td>
+      <td>-7.0979</td>
+      <td>-7.7034</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(5.9718)</td>
+      <td>(5.2418)</td>
+      <td>(5.8037)</td>
+      <td>(6.3936)</td>
+    </tr>
+    <tr>
+      <th>TQ</th>
+      <td>0.8510</td>
+      <td>0.1543</td>
+      <td>0.7713</td>
+      <td>0.8573</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(1.8071)</td>
+      <td>(1.4555)</td>
+      <td>(1.7973)</td>
+      <td>(1.7468)</td>
+    </tr>
+    <tr>
+      <th>GROWTH</th>
+      <td>-3.3011</td>
+      <td>-3.7974</td>
+      <td>-3.2564</td>
+      <td>-3.0198</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(2.3048)</td>
+      <td>(2.5145)</td>
+      <td>(2.3462)</td>
+      <td>(2.1565)</td>
+    </tr>
+    <tr>
+      <th>CASH</th>
+      <td>8.7125</td>
+      <td>7.2175</td>
+      <td>8.7935</td>
+      <td>7.2855</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(6.3689)</td>
+      <td>(5.8880)</td>
+      <td>(6.3279)</td>
+      <td>(5.8137)</td>
+    </tr>
+    <tr>
+      <th>Firm effects</th>
+      <td>Random</td>
+      <td>Random</td>
+      <td>Random</td>
+      <td>Random</td>
+    </tr>
+    <tr>
+      <th>Year FE</th>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <th>Observations</th>
+      <td>219</td>
+      <td>219</td>
+      <td>219</td>
+      <td>219</td>
+    </tr>
+    <tr>
+      <th>Firms (G used for t(G-1))</th>
+      <td>24 (24)</td>
+      <td>24 (24)</td>
+      <td>24 (24)</td>
+      <td>24 (24)</td>
+    </tr>
+    <tr>
+      <th>Within R²</th>
+      <td>0.115</td>
+      <td>0.138</td>
+      <td>0.109</td>
+      <td>0.102</td>
+    </tr>
+    <tr>
+      <th>Overall R²</th>
+      <td>0.180</td>
+      <td>0.139</td>
+      <td>0.165</td>
+      <td>0.339</td>
+    </tr>
+    <tr>
+      <th>FC variable: p-value, t(G-1)</th>
+      <td>0.050</td>
+      <td>0.180</td>
+      <td>0.055</td>
+      <td>0.260</td>
+    </tr>
+    <tr>
+      <th>FC variable: p-value, wild cluster bootstrap</th>
+      <td>n/a</td>
+      <td>n/a</td>
+      <td>n/a</td>
+      <td>n/a</td>
+    </tr>
+  </tbody>
+</table><h3>VIF Model 2 (§5.4)</h3><table class="dataframe t">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>VIF pooled, Model 1</th>
+      <th>VIF pooled, Model 2</th>
+      <th>VIF two-way demeaned, Model 1</th>
+      <th>VIF two-way demeaned, Model 2</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>SA Index</th>
+      <td>1.430</td>
+      <td>1.966</td>
+      <td>1.057</td>
+      <td>3.414</td>
+    </tr>
+    <tr>
+      <th>ROA</th>
+      <td>2.130</td>
+      <td>2.369</td>
+      <td>1.445</td>
+      <td>1.446</td>
+    </tr>
+    <tr>
+      <th>LEV</th>
+      <td>1.415</td>
+      <td>1.522</td>
+      <td>1.358</td>
+      <td>1.388</td>
+    </tr>
+    <tr>
+      <th>TQ</th>
+      <td>2.064</td>
+      <td>2.093</td>
+      <td>1.312</td>
+      <td>1.312</td>
+    </tr>
+    <tr>
+      <th>GROWTH</th>
+      <td>1.061</td>
+      <td>1.062</td>
+      <td>1.213</td>
+      <td>1.213</td>
+    </tr>
+    <tr>
+      <th>CASH</th>
+      <td>1.322</td>
+      <td>1.324</td>
+      <td>1.165</td>
+      <td>1.248</td>
+    </tr>
+    <tr>
+      <th>SIZE</th>
+      <td></td>
+      <td>1.822</td>
+      <td></td>
+      <td>3.429</td>
+    </tr>
+  </tbody>
+</table><p class='n'>Two-way fixed-effects (firm and year) panel regressions, same estimator and sample as Table 4 (N = 219 firm-years, 24 firms; 7780 and 7791 have one observation each and are absorbed by the firm effect).<br>Standard errors in parentheses are clustered by firm, CR1 (G/(G-1) x (N-1)/(N-K)). Stars use two-sided p-values from a t distribution with G-1 = 21 degrees of freedom, G = firms with at least two observations (Cameron and Miller 2015): *** p&lt;0.01, ** p&lt;0.05, * p&lt;0.1.<br>Wild cluster bootstrap p-value for the financial-constraint (FC) variable of each column: restricted (null imposed), Rademacher weights, B = 9999, seed = 20261106, on the equivalent least-squares-dummy-variable regression, clusters = firms.<br>Regressors are winsorized at the 1st/99th percentiles of the 219-row sample; SA is computed from winsorized Size and Age. Dependent variables (TESG, E, S, G) are winsorized at the 1st/99th percentiles of the 219-row sample (D18 revised 2026-11-07).<br>Column (1) repeats Table 4 column (1).<br>RE sheet: same models with random firm effects and year dummies; firm-clustered SE with the G/(G-1) x (N-1)/(N-K) factor; p-values from t(G-1) with G = 24 (all firms contribute to the RE estimate); no wild bootstrap. Overall R² = squared correlation of fitted and actual values in levels.<br>Column (2), brief §5.1: SA dummy = 1 if the firm-year&#x27;s SA Index is above the sample median (-4.7612, pooled 219 firm-years), 0 otherwise; 109 firm-years equal 1. With firm fixed effects the coefficient is identified only from the 5 firms whose dummy changes over time (1215, 1217, 1220, 1231, 1235).<br>Column (3), brief §5.3: SA Index lagged one year within firm (previous row must be year t-1). For 2016 the lag is SA(2015), computed from 2015 total assets, FX rate and founding year with the same winsorizing cutoffs (2015 used as t-1 input only). For the two singleton firms (7780, 7791) the lag is SA(2024) from their pre-listing year; they do not affect the coefficients.<br>Column (4), brief §5.4: Model 2 adds SIZE = ln(total assets, NTD thousand), winsorized. SIZE and SA are mechanically related (correlation -0.586 pooled, -0.827 after removing firm and year means); VIF in the second sheet: pooled (OLS with constant, as in Table 3) and on the two-way-demeaned regressors, which is the collinearity the FE estimator faces.<br>Source: TEJ; own calculations.</p></body></html>

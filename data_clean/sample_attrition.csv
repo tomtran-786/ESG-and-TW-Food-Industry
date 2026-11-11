@@ -1,0 +1,7 @@
+step,rows,firms,removed
+"Universe firms in file (TSE M1200, not delisted before 2016, TDRs out)",,24,
+Merged panel 2015-2025 (balance sheet base),250,24,
+drop 2015 rows (lag input only),228,24,22
+drop rows not on TWSE (IFRS 市場別 != TSE),222,24,6
+drop equity <= 0,222,24,0
+drop missing TESG score,219,24,3

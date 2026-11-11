@@ -1,0 +1,8 @@
+quantity,value
+SA sd overall / between firms / two-way within,0.735 / 0.796 / 0.0417
+TESG sd overall / between firms / two-way within,9.23 / 8.47 / 3.68
+Share of SA variance left after firm + year FE,0.3224%
+"beta_1 95% CI, t(G-1)","[-26.94, 31.43]"
+"Effect of 1 within-sd of SA on TESG, point [95% CI]","0.09 [-1.12, 1.31] points"
+"Minimum detectable effect (80% power, 5%), per within-sd of SA",1.72 points
+RE beta x between-firm sd of SA,-3.82 points

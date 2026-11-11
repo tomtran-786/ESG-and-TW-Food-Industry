@@ -1,0 +1,422 @@
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/logs/04_check_r_style_se.log
+  log type:  text
+ opened on:   7 Nov 2026, 13:19:23
+
+. di as text "Run on " c(current_date) " " c(current_time)
+Run on  7 Nov 2026 13:19:23
+
+. di as text "ROOT = $ROOT"
+ROOT = /Users/tranvomanhtuan/Downloads/10_RA-Test
+
+. 
+. *------------------------------------------------------------------------------
+. * PROGRAMS
+. *------------------------------------------------------------------------------
+. capture program drop chkcount
+
+. program define chkcount
+  1.     version 14.1
+  2.     args blk item got want note
+  3.     local bad = abs(`got' - `want')
+  4.     local verdict = cond(`bad' == 0, "PASS", "FAIL")
+  5.     post pf ("`blk'") ("`item'") (`got') (`want') (`bad') ("`verdict'") ("`note'")
+  6.     di as text %-6s "`verdict'" " [`blk'] `item': got `got', expected `want'"
+  7. end
+
+. 
+. capture program drop chkinfo
+
+. program define chkinfo
+  1.     version 14.1
+  2.     args blk item val note
+  3.     post pf ("`blk'") ("`item'") (`val') (.) (.) ("INFO") ("`note'")
+  4.     di as text %-6s "INFO" " [`blk'] `item': `val'  `note'"
+  5. end
+
+. 
+. tempfile rep pyall res ind
+
+. postfile pf str3 block str100 item double value double reference double n_bad str5 verdict str240 note using "`rep'", replace
+(note: file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_01583.000001 not found)
+
+. 
+. *------------------------------------------------------------------------------
+. * 1. PYTHON REFERENCE VALUES (same mapping as 02_compare_python.do, block F1)
+. *------------------------------------------------------------------------------
+. import delimited using "$ROOT/outputs/tables/table4_inference.csv", clear varnames(1) stringcols(1 2) case(lower) encoding("utf-8")
+(13 vars, 12 obs)
+
+. generate pykey = .
+(12 missing values generated)
+
+. replace pykey = 1 if strpos(column, "(1)") > 0
+(6 real changes made)
+
+. replace pykey = 2 if strpos(column, "(2)") > 0
+(6 real changes made)
+
+. rename variable pyvar
+
+. keep pykey pyvar beta se_cr1 se_default
+
+. rename (beta se_cr1 se_default) (py_beta py_se_cr1 py_se_default)
+
+. tempfile py4
+
+. save "`py4'"
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_01583.000005 saved
+
+. 
+. import delimited using "$ROOT/outputs/tables/table5_6_inference.csv", clear varnames(1) stringcols(1 2 3) case(lower) encoding("utf-8")
+(13 vars, 49 obs)
+
+. generate pykey = .
+(49 missing values generated)
+
+. replace pykey = 1 if strpos(model, "Model 1") > 0
+(6 real changes made)
+
+. replace pykey = 4 if strpos(model, "5.1") > 0
+(6 real changes made)
+
+. replace pykey = 5 if strpos(model, "5.3") > 0
+(6 real changes made)
+
+. replace pykey = 6 if strpos(model, "5.4") > 0
+(7 real changes made)
+
+. replace pykey = 7 if strpos(model, "Table 6 (2)") > 0
+(6 real changes made)
+
+. replace pykey = 8 if strpos(model, "Table 6 (3)") > 0
+(6 real changes made)
+
+. replace pykey = 9 if strpos(model, "Table 6 (4)") > 0
+(6 real changes made)
+
+. drop if missing(pykey) | pykey == 1
+(12 observations deleted)
+
+. rename variable pyvar
+
+. keep pykey pyvar beta se_cr1 se_default
+
+. rename (beta se_cr1 se_default) (py_beta py_se_cr1 py_se_default)
+
+. append using "`py4'"
+
+. save "`pyall'"
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_01583.000002 saved
+
+. 
+. *------------------------------------------------------------------------------
+. * 2. STATA RESULTS AND THE R-STYLE VARIANTS
+. *------------------------------------------------------------------------------
+. use "$OUT/stata_results_long.dta", clear
+
+. generate pykey = cond(mid == 3, 2, mid)
+
+. generate str16 pyvar = cond(variable == "growth_w197", "growth_w", variable)
+
+. merge m:1 pykey pyvar using "`pyall'", keep(master match) gen(_mp)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                                55  (_mp==3)
+    -----------------------------------------
+
+. 
+. * quantities used by the formulas
+. generate double Kall   = k + (Ny - 1) + G24            // slopes + year dummies + firm dummies and constant
+
+. generate double df_plm = N - k - (G24 + Ny - 1)        // plm: N - k - (n + T - 1)
+
+. generate double se_hc0 = se_cr0
+
+. generate double se_sss = se_cr0 * sqrt(G24 / (G24 - 1) * (N - 1) / (N - k))
+
+. generate double se_hc1 = se_cr0 * sqrt(N / (N - k))
+
+. foreach t in hc0 sss hc1 {
+  2.     generate double p_`t' = 2 * ttail(df_plm, abs(beta / se_`t'))
+  3.     generate str3 st_`t' = cond(p_`t' < 0.01, "***", cond(p_`t' < 0.05, "**", cond(p_`t' < 0.10, "*", "")))
+  4. }
+(43 missing values generated)
+(43 missing values generated)
+(43 missing values generated)
+
+. * reported p-value of Table 4: CR1 SE, t(G-1) with G = 22 firms that have at least two observations
+. * (01 adds t_clust and p_t_G1 only to the csv, not to the dta, so they are rebuilt here)
+. generate double t_clust = beta / se_clust
+
+. generate double p_t_G1  = 2 * ttail(G22 - 1, abs(t_clust))
+
+. generate str3 st_rep = cond(p_t_G1 < 0.01, "***", cond(p_t_G1 < 0.05, "**", cond(p_t_G1 < 0.10, "*", "")))
+(51 missing values generated)
+
+. foreach t in hc0 sss hc1 {
+  2.     generate byte chg_`t' = (st_`t' != st_rep)
+  3. }
+
+. sort mid variable
+
+. save "`res'"
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_01583.000003 saved
+
+. 
+. *------------------------------------------------------------------------------
+. * BLOCK B  CHECKS
+. *------------------------------------------------------------------------------
+. di as text _n "=== Block B: checks ==="
+
+=== Block B: checks ===
+
+. quietly count
+
+. chkcount "B" "coefficients in the Stata results" `r(N)' 55 "9 models, 6 or 7 coefficients each"
+PASS   [B] coefficients in the Stata results: got 55, expected 55
+
+. quietly count if _mp == 1
+
+. chkcount "B" "coefficients without a Python counterpart" `r(N)' 0 "same keys as 02_compare_python.do"
+PASS   [B] coefficients without a Python counterpart: got 0, expected 0
+
+. quietly count if abs(df_unadj - df_plm) > 1e-9
+
+. chkcount "B" "rows where plm df differs from the regression df" `r(N)' 0 "df.residual = N - k - (n + T - 1)"
+PASS   [B] rows where plm df differs from the regression df: got 0, expected 0
+
+. quietly count if mid != 2 & abs(se_clust / py_se_cr1 - 1) > 1e-9
+
+. chkcount "B" "rows (not Model 2) where Python CR1 SE differs from Stata" `r(N)' 0 "Model 2 excluded: different winsorisation"
+PASS   [B] rows (not Model 2) where Python CR1 SE differs from Stata: got 0, expected 0
+
+. quietly count if mid != 2 & abs(se_cr0 * sqrt(N / (N - Kall)) / py_se_default - 1) > 1e-9
+
+. chkcount "B" "rows (not Model 2) where Python default SE differs from CR0 x sqrt(N/(N-K))" `r(N)' 0 "so Python default is not plm type HC0"
+PASS   [B] rows (not Model 2) where Python default SE differs from CR0 x sqrt(N/(N-K)): got 0, expected 0
+
+. quietly count if abs(se_cr0 * sqrt(G24 / (G24 - 1) * (N - 1) / (N - Kall)) / se_clust - 1) > 1e-9
+
+. chkcount "B" "rows where Stata CR1 SE differs from CR0 x its factor" `r(N)' 0 "G/(G-1) x (N-1)/(N-K), K = all parameters"
+PASS   [B] rows where Stata CR1 SE differs from CR0 x its factor: got 0, expected 0
+
+. 
+. * B4: second route to CR0, main model: Stata's cluster covariance divided by its own small-sample factor
+. use "$OUT/stata_panel.dta", clear
+
+. quietly regress tesg sa roa_w lev_w tq_w growth_w cash_w i.firm i.year if my_sample == 1
+
+. local dfr = e(df_r)
+
+. local nobs = e(N)
+
+. quietly regress tesg sa roa_w lev_w tq_w growth_w cash_w i.firm i.year if my_sample == 1, vce(cluster firm)
+
+. local gcl = e(N_clust)
+
+. matrix Vc = e(V)
+
+. local fac = `gcl' / (`gcl' - 1) * (`nobs' - 1) / `dfr'        // CR1 factor, N - K = dfr of the non-robust fit
+
+. tempname hh
+
+. postfile `hh' str16 variable double se_cr0_b using "`ind'", replace
+(note: file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_01583.000004 not found)
+
+. local j = 0
+
+. foreach x in sa roa_w lev_w tq_w growth_w cash_w {
+  2.     local ++j
+  3.     post `hh' ("`x'") (sqrt(Vc[`j', `j'] / `fac'))
+  4. }
+
+. postclose `hh'
+
+. use "`res'", clear
+
+. keep if mid == 1
+(49 observations deleted)
+
+. merge 1:1 variable using "`ind'", keep(master match) gen(_mi)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                                 6  (_mi==3)
+    -----------------------------------------
+
+. quietly count if _mi != 3
+
+. chkcount "B" "main-model coefficients without a second-route CR0" `r(N)' 0 "6 slopes"
+PASS   [B] main-model coefficients without a second-route CR0: got 0, expected 0
+
+. quietly count if abs(se_cr0_b / se_cr0 - 1) > 1e-9
+
+. chkcount "B" "main-model CR0: second route differs from the Mata sandwich" `r(N)' 0 "relative tolerance 1e-9"
+PASS   [B] main-model CR0: second route differs from the Mata sandwich: got 0, expected 0
+
+. 
+. *------------------------------------------------------------------------------
+. * BLOCK C  R-STYLE RESULTS
+. *------------------------------------------------------------------------------
+. use "`res'", clear
+
+. di as text _n "=== Block C: main model (mid 1). se_clust = reported CR1; p_t_G1 = reported p, t(G-1), G = 22 ==="
+
+=== Block C: main model (mid 1). se_clust = reported CR1; p_t_G1 = reported p, t(G-1), G = 22 ===
+
+. list variable beta se_clust p_t_G1 st_rep se_hc0 p_hc0 st_hc0 se_sss p_sss st_sss se_hc1 p_hc1 st_hc1 if mid == 1, noobs sep(0) abbreviate(12)
+
+  +-----------------------------------------------------------------------------------------------------------------------------------------------------------+
+  | variable         beta    se_clust      p_t_G1   st_rep      se_hc0       p_hc0   st_hc0      se_sss       p_sss   st_sss      se_hc1       p_hc1   st_hc1 |
+  |-----------------------------------------------------------------------------------------------------------------------------------------------------------|
+  |   cash_w    7.3410875   6.7258136   .28742693            5.9828916   .22142004            6.1828866   .23666448            6.0665725   .22783178          |
+  | growth_w   -3.6871056   2.5156811   .15755762            2.2378032   .10117002             2.312608   .11261213            2.2691026   .10592973          |
+  |    lev_w   -9.4018915   6.1817651   .14319835            5.4989378   .08903254        *   5.6827552   .09977677        *   5.5758497   .09349347        * |
+  |    roa_w    1.2904327    11.30076   .91017197            10.052497   .89799998             10.38853   .90128201            10.193098   .89939935          |
+  |       sa    2.4887186   14.316133   .86365597            12.734797   .84527939            13.160494   .85022338            12.912915   .84738695          |
+  |     tq_w    .79324405   2.0099504   .69707458            1.7879346   .65781763            1.8477014   .66820816            1.8129419   .66224054          |
+  +-----------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+. 
+. quietly count if chg_hc0 == 1
+
+. local n0 = r(N)
+
+. quietly count if chg_sss == 1
+
+. local n1 = r(N)
+
+. quietly count if chg_hc1 == 1
+
+. local n2 = r(N)
+
+. chkinfo "C" "coefficients whose stars change, type HC0 (plm default)" `n0' "out of 55, against the reported CR1 and t(G-1)"
+INFO   [C] coefficients whose stars change, type HC0 (plm default): 10  out of 55, against the reported CR1 and t(G-1)
+
+. chkinfo "C" "coefficients whose stars change, type sss" `n1' "out of 55"
+INFO   [C] coefficients whose stars change, type sss: 8  out of 55
+
+. chkinfo "C" "coefficients whose stars change, type HC1" `n2' "out of 55"
+INFO   [C] coefficients whose stars change, type HC1: 9  out of 55
+
+. quietly count if inlist(variable, "sa", "sa_lag", "fc_dummy") & (chg_hc0 == 1 | chg_sss == 1 | chg_hc1 == 1)
+
+. chkinfo "C" "SA, lagged SA or SA dummy coefficients whose stars change under any type" `r(N)' "the coefficient the research question is about"
+INFO   [C] SA, lagged SA or SA dummy coefficients whose stars change under any type: 1  the coefficient the research question is about
+
+. quietly count if inlist(variable, "sa", "sa_lag", "fc_dummy") & mid <= 6
+
+. chkinfo "C" "SA-type coefficients in the TESG models (mid 1 to 6)" `r(N)' "listed below"
+INFO   [C] SA-type coefficients in the TESG models (mid 1 to 6): 6  listed below
+
+. quietly summarize se_hc0 if mid == 1 & variable == "sa"
+
+. chkinfo "C" "main model SA: SE under HC0" `r(mean)' "reported CR1 SE is 14.316"
+INFO   [C] main model SA: SE under HC0: 12.73479738793752  reported CR1 SE is 14.316
+
+. quietly summarize p_hc0 if mid == 1 & variable == "sa"
+
+. chkinfo "C" "main model SA: p under HC0, t(180)" `r(mean)' "reported p is 0.8637"
+INFO   [C] main model SA: p under HC0, t(180): .845279393697463  reported p is 0.8637
+
+. 
+. di as text _n "=== SA coefficients under each convention (TESG models, mid 1 to 6) ==="
+
+=== SA coefficients under each convention (TESG models, mid 1 to 6) ===
+
+. list mid model variable beta p_t_G1 p_hc0 p_sss p_hc1 if inlist(variable, "sa", "sa_lag", "fc_dummy") & mid <= 6, noobs sep(0) abbreviate(14)
+
+  +-----------------------------------------------------------------------------------------------------------+
+  | mid                         model   variable         beta      p_t_G1       p_hc0       p_sss       p_hc1 |
+  |-----------------------------------------------------------------------------------------------------------|
+  |   1                      (1) Main         sa    2.4887186   .86365597   .84527939   .85022338   .84738695 |
+  |   2             (2) Brief-literal         sa    .55077273   .97084964   .96659773   .96772015   .96711003 |
+  |   3   (2b) diag: growth w. on 197         sa    .50281865   .97342121    .9695441   .97056762   .97001126 |
+  |   4            (2) SA dummy (5.1)   fc_dummy   -3.1224415    .3626125   .29686753   .31272126   .30356065 |
+  |   5           (3) Lagged SA (5.3)     sa_lag    11.191828   .35656043   .29068064   .30651958   .29736577 |
+  |   6      (4) Model 2 + SIZE (5.4)         sa    4.6569837   .83493148   .81227131   .81865453   .81524035 |
+  +-----------------------------------------------------------------------------------------------------------+
+
+. 
+. di as text _n "=== Coefficients whose stars change under at least one R-style type ==="
+
+=== Coefficients whose stars change under at least one R-style type ===
+
+. list mid model variable p_t_G1 st_rep p_hc0 st_hc0 p_sss st_sss p_hc1 st_hc1 if chg_hc0 == 1 | chg_sss == 1 | chg_hc1 == 1, noobs sep(0) abbreviate(14)
+
+  +-------------------------------------------------------------------------------------------------------------------------------------+
+  | mid                         model      variable      p_t_G1   st_rep       p_hc0   st_hc0       p_sss   st_sss       p_hc1   st_hc1 |
+  |-------------------------------------------------------------------------------------------------------------------------------------|
+  |   1                      (1) Main         lev_w   .14319835            .08903254        *   .09977677        *   .09349347        * |
+  |   2             (2) Brief-literal      growth_w   .11746361            .06593947        *   .07546439        *   .07015512        * |
+  |   2             (2) Brief-literal         lev_w   .11218709            .06188341        *   .07107398        *   .06594719        * |
+  |   3   (2b) diag: growth w. on 197   growth_w197   .11566046            .06454695        *   .07395877        *    .0687112        * |
+  |   3   (2b) diag: growth w. on 197         lev_w   .11234807             .0620063        *   .07120723        *   .06607478        * |
+  |   4            (2) SA dummy (5.1)         lev_w   .12589723            .07483957        *   .08465282        *   .07890334        * |
+  |   5           (3) Lagged SA (5.3)      growth_w   .13315228            .08073011        *   .09094616        *   .08496552        * |
+  |   5           (3) Lagged SA (5.3)         lev_w   .08774508        *   .04558098       **   .05295782        *   .04861254       ** |
+  |   6      (4) Model 2 + SIZE (5.4)         lev_w   .11969572            .06911874        *   .07921417        *   .07367593        * |
+  |   9                G pillar (5.2)            sa   .09243243        *   .04899851       **   .05670511        *   .05216917        * |
+  +-------------------------------------------------------------------------------------------------------------------------------------+
+
+. 
+. keep mid model yvar variable beta se_clust p_t_G1 st_rep se_hc0 p_hc0 st_hc0 se_sss p_sss st_sss se_hc1 p_hc1 st_hc1 chg_hc0 chg_sss chg_hc1 df_plm N k G24
+
+. export delimited using "$OUT/check_r_style_inference.csv", replace
+(note: file /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/out/check_r_style_inference.csv not found)
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/out/check_r_style_inference.csv saved
+
+. 
+. *------------------------------------------------------------------------------
+. * REPORT
+. *------------------------------------------------------------------------------
+. postclose pf
+
+. use "`rep'", clear
+
+. export delimited using "$OUT/check_r_style_report.csv", replace
+(note: file /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/out/check_r_style_report.csv not found)
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/out/check_r_style_report.csv saved
+
+. quietly count if verdict == "PASS"
+
+. local npass = r(N)
+
+. quietly count if verdict == "FAIL"
+
+. local nfail = r(N)
+
+. di as text _n "=============================================================="
+
+==============================================================
+
+. di as text "SUMMARY: PASS `npass', FAIL `nfail'"
+SUMMARY: PASS 8, FAIL 0
+
+. if `nfail' == 0 {
+.     di as result "All checks passed. The R-style numbers in block C rest on the plm formulas stated in the header; R was not run."
+All checks passed. The R-style numbers in block C rest on the plm formulas stated in the header; R was not run.
+. }
+
+. else {
+.     di as error "`nfail' check(s) failed. They are listed below; send the log back."
+.     list block item value reference n_bad note if verdict == "FAIL", noobs sep(0) abbreviate(24)
+. }
+
+. di as text "Report : $OUT/check_r_style_report.csv"
+Report : /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/out/check_r_style_report.csv
+
+. di as text "Table  : $OUT/check_r_style_inference.csv"
+Table  : /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/out/check_r_style_inference.csv
+
+. log close
+      name:  <unnamed>
+       log:  /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/logs/04_check_r_style_se.log
+  log type:  text
+ closed on:   7 Nov 2026, 13:19:24
+----------------------------------------------------------------------------------------------------------------------------------------------------------------

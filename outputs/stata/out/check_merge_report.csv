@@ -1,0 +1,100 @@
+block,item,value,reference,n_bad,max_absdiff,verdict,note
+A,universe: firms in file,39,39,0,,PASS,docs/data_log.md: 39 rows in the file
+A,universe: TSE M1200 firms (rule 1),24,24,0,,PASS,TSE industry code M1200
+A,universe: rule 1 vs rule 2 disagree,0,0,0,,PASS,rule 2 = industry 02 and not delisted before 2016
+A,IFRS: data rows in file,261,261,0,,PASS,docs/data_log.md: 261 rows
+A,IFRS: rows whose period is not December,0,0,0,,PASS,docs/data_log.md: all month 12
+A,IFRS: rows outside the 24-firm universe (dropped),11,11,0,,PASS,docs/data_log.md: 11 rows of TDR 910322
+A,IFRS: dropped rows that are not TDR 910322,0,0,0,,PASS,only the TDR may be dropped
+A,IFRS: base rows after the universe filter,250,250,0,,PASS,docs/data_log.md: 250 rows
+A,"IFRS: duplicated (stock_code, year)",0,0,0,,PASS,key must be unique
+D,IFRS: rows where assets differ from liabilities plus equity,0,0,0,,PASS,docs/data_log.md: identity holds in all 250 rows
+A,market: rows whose month is not December,0,0,0,,PASS,monthly file holds December only
+A,market: dropped rows that are not TDR 910322,0,0,0,,PASS,only the TDR may be dropped
+A,"market: duplicated (stock_code, year)",0,0,0,,PASS,key must be unique
+A,TESG: data rows in file,336,336,0,,PASS,docs/data_log.md: 336 rows
+A,TESG: June rating rows (dropped),91,91,0,,PASS,docs/data_log.md: 91 June ratings
+A,TESG: rows that are neither June nor December,0,0,0,,PASS,only two rating months exist
+A,TESG: December rating rows,245,245,0,,PASS,336 minus 91
+A,TESG: December ratings with no report year (dropped),1,1,0,,PASS,docs/data_log.md: 7780 rating 2025/12
+C,TESG: December ratings where rating year = report year + 1,244,,,,INFO,every rating that has a report year; keying on rating year would shift each score by one year
+C,TESG: December ratings where the gap is not 1,0,,,,INFO,0 means a uniform one-year gap
+A,TESG: December ratings with report year 2015 (dropped),22,22,0,,PASS,docs/data_log.md: 2015 TESG not used
+A,"TESG: rows kept, keyed on report year",222,222,0,,PASS,docs/data_log.md: 222 rows
+A,TESG: rows whose firm is outside the universe,0,0,0,,PASS,TESG file has no TDR
+A,"TESG: duplicated (stock_code, report year)",0,0,0,,PASS,key must be unique after the rules
+A,FX: rows whose period is not /12,0,0,0,,PASS,"annual series, December label"
+A,FX: annual values in file,11,11,0,,PASS,docs/data_log.md: 11 annual values 2015-2025
+A,join: base rows matched in the market file,246,246,0,,PASS,"docs/data_log.md: 246 of 250, the 4 unmatched are 7780 and 7791 in 2022-2023"
+A,join: base rows matched in the TESG file,222,222,0,,PASS,docs/data_log.md: 222 of 250
+A,join: base rows matched in the FX file,250,250,0,,PASS,every year 2015-2025 has a rate
+A,flags: lag_only rows,22,22,0,,PASS,docs/data_log.md: 22 rows of 2015
+A,flags: excluded as not_TSE,6,6,0,,PASS,docs/data_log.md: attrition 250 to 228 to 222
+A,flags: excluded as equity_le_0,0,0,0,,PASS,docs/data_log.md: equity > 0 in every row
+A,flags: excluded as tesg_missing,3,3,0,,PASS,"docs/data_log.md: 3 rows graded W*, 1218 1219 1225 in 2025"
+A,flags: in_sample rows,219,219,0,,PASS,docs/data_log.md: N = 219
+A,flags: in_sample rows 2016-2024,198,198,0,,PASS,22 firms x 9 years
+A,flags: in_sample rows 2025,21,21,0,,PASS,docs/data_log.md: 21 firms in 2025
+A,flags: firms with at least one in_sample row,24,24,0,,PASS,docs/data_log.md: 24 firms
+D,IFRS market value / (market file value x 1000): minimum,.9992876712328768,,,,INFO,docs/data_log.md: 0.9993
+D,IFRS market value / (market file value x 1000): maximum,1.001282485875706,,,,INFO,docs/data_log.md: 1.0013
+E,market: rows present in both market files (24 firms),222,,,,INFO,docs/data_log.md: 232 overlapping rows incl. the TDR; compare below
+E,"market: overlapping rows where price, shares or value differ",0,0,0,,PASS,docs/data_log.md: the two files agree exactly
+B,rows only in panel_merged.csv,0,0,0,,PASS,"key (stock_code, year)"
+B,rows only in the rebuilt panel,0,0,0,,PASS,"key (stock_code, year)"
+B,rows in both,250,250,0,,PASS,250 firm-years
+B,panel columns not covered by this comparison,0,0,0,,PASS,
+B,columns compared (all except the two keys),52,52,0,,PASS,54 columns minus stock_code and year
+B,in_sample,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,lag_only,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,yyyymm,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,month,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,mcap_ifrs_k,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,total_assets,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,current_assets,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,cash_amt,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,total_liabilities,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,st_borrowings,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,borrowings,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,noncurrent_liabilities,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,equity,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,revenue,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,gross_profit,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,operating_income,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,pretax_income,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,net_income_consol,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,net_income_parent,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,finance_cost,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,cfo,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,depreciation,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,amortization,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,cfi,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,price,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,shares_k,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,mcap_m,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,month_end_date,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,rating_quarter,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,rating_date,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,tesg,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,e,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,s,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,g,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,event_radar,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,founding_year,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,listing_year,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,usd_ntd,250,,0,0,PASS,one-sided missing 0; value differences 0
+B,name_zh,250,,0,,PASS,"text compare, dash read as empty"
+B,name_en,250,,0,,PASS,"text compare, dash read as empty"
+B,firm,250,,0,,PASS,"text compare, dash read as empty"
+B,consolidated,250,,0,,PASS,"text compare, dash read as empty"
+B,currency,250,,0,,PASS,"text compare, dash read as empty"
+B,market_ifrs,250,,0,,PASS,"text compare, dash read as empty"
+B,industry_code,250,,0,,PASS,"text compare, dash read as empty"
+B,market_mkt,250,,0,,PASS,"text compare, dash read as empty"
+B,assured,250,,0,,PASS,"text compare, dash read as empty"
+B,tesg_grade,250,,0,,PASS,"text compare, dash read as empty"
+B,founding_date,250,,0,,PASS,"text compare, dash read as empty"
+B,listing_date,250,,0,,PASS,"text compare, dash read as empty"
+B,delist_date,250,,0,,PASS,"text compare, dash read as empty"
+B,excl_reason,250,,0,,PASS,"text compare, dash read as empty"
+F,spot rows found in both files,12,12,0,,PASS,12 firm-years chosen to cover the key cases

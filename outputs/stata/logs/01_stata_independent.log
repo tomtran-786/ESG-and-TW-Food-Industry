@@ -1,0 +1,1142 @@
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/logs/01_stata_independent.log
+  log type:  text
+ opened on:   7 Nov 2026, 21:09:46
+
+. 
+. di as text "Run on " c(current_date) " " c(current_time)
+Run on  7 Nov 2026 21:09:46
+
+. di as text "ROOT = $ROOT"
+ROOT = /Users/tranvomanhtuan/Downloads/10_RA-Test
+
+. 
+. 
+. *------------------------------------------------------------------------------
+. * 0. PACKAGES: none. The wild cluster bootstrap is coded in Mata (section 1, wcb), so no SSC package is needed.
+. *------------------------------------------------------------------------------
+. 
+. *------------------------------------------------------------------------------
+. * 1. MATA HELPERS
+. *   q7():   quantile, type 7 (h = (n-1)p + 1, linear interpolation), as R's default
+. *   cr0v(): cluster-robust sandwich with NO small-sample factor (CR0), computed from the
+. *           regressors partialled out of the firm and year dummies and the regression residuals.
+. *           Used to separate the sandwich itself from the small-sample convention.
+. *------------------------------------------------------------------------------
+. mata:
+------------------------------------------------- mata (type end to exit) --------------------------------------------------------------------------------------
+: real scalar q7(real colvector x, real scalar p)
+> {
+>     real colvector s
+>     real scalar n, h, lo
+>     s  = sort(select(x, x :< .), 1)
+>     n  = rows(s)
+>     h  = (n - 1) * p + 1
+>     lo = floor(h)
+>     if (lo >= n) return(s[n])
+>     return(s[lo] + (h - lo) * (s[lo + 1] - s[lo]))
+> }
+
+: 
+: real matrix cr0v(string scalar xvars, string scalar uvar, string scalar cvar, string scalar touse)
+> {
+>     real matrix X, XXi, meat, V, Xg, info
+>     real colvector u, id, ug, sc
+>     real scalar g, G
+>     X    = st_data(., tokens(xvars), touse)
+>     u    = st_data(., uvar, touse)
+>     id   = st_data(., cvar, touse)
+>     info = panelsetup(id, 1)
+>     G    = rows(info)
+>     XXi  = invsym(cross(X, X))
+>     meat = J(cols(X), cols(X), 0)
+>     for (g = 1; g <= G; g++) {
+>         Xg   = panelsubmatrix(X, g, info)
+>         ug   = panelsubmatrix(u, g, info)
+>         sc   = cross(Xg, ug)
+>         meat = meat + sc * sc'
+>     }
+>     V = XXi * meat * XXi
+>     return(V)
+> }
+
+: 
+: // wcb(): restricted wild cluster bootstrap-t for ONE coefficient (column j of xvars) of the LSDV regression
+: //        y = [xvars, firm dummies, year dummies, constant] g + u.  Null beta_j = 0 imposed, Rademacher weights drawn
+: //        per cluster, B draws, CR0 cluster covariance in the original and in every bootstrap sample
+: //        (a common small-sample scalar cancels in |t*| >= |t|, so the p-value does not depend on it).
+: //        Frisch-Waugh form:  t* = x~' (e_r * w) / sqrt( sum_g ( x~_g' u*_g )^2 ),  u* = M_Z (e_r * w),
+: //        e_r = residuals of y on all columns except j, x~ = x_j residualised on the same columns.
+: //        Returns (p-value, original t, beta_j); the caller checks t and beta_j against regress.
+: real rowvector wcb(string scalar yvar, string scalar xvars, string scalar dvars, string scalar cvar, string scalar touse, real scalar j, real scalar B, real s
+> calar seed)
+> {
+>     real matrix X, D, Z, Zm, Rm, Zi, E, U, S, Wg, info
+>     real colvector y, id, er, xt, xj, idx, U0
+>     real rowvector keep, num, ss
+>     real scalar N, G, g, ss0, t0, bj, p
+> 
+>     y    = st_data(., yvar, touse)
+>     X    = st_data(., tokens(xvars), touse)
+>     D    = st_data(., tokens(dvars), touse)
+>     id   = st_data(., cvar, touse)
+>     N    = rows(y)
+>     Z    = X, D, J(N, 1, 1)
+>     keep = select(1..cols(Z), (1..cols(Z)) :!= j)
+>     Zm   = Z[., keep]
+>     xj   = Z[., j]
+>     Rm   = invsym(cross(Zm, Zm))
+>     er   = y  - Zm * (Rm * cross(Zm, y))
+>     xt   = xj - Zm * (Rm * cross(Zm, xj))
+>     Zi   = invsym(cross(Z, Z))
+>     info = panelsetup(id, 1)
+>     G    = rows(info)
+> 
+>     U0  = y - Z * (Zi * cross(Z, y))
+>     ss0 = 0
+>     for (g = 1; g <= G; g++) {
+>         ss0 = ss0 + sum(panelsubmatrix(xt, g, info) :* panelsubmatrix(U0, g, info))^2
+>     }
+>     t0 = sum(xt :* y) / sqrt(ss0)
+>     bj = sum(xt :* y) / sum(xt :* xt)
+> 
+>     rseed(seed)
+>     Wg  = 2 * (runiform(G, B) :> 0.5) :- 1
+>     idx = J(N, 1, 1)
+>     for (g = 1; g <= G; g++) {
+>         idx[|info[g, 1], 1 \ info[g, 2], 1|] = J(info[g, 2] - info[g, 1] + 1, 1, g)
+>     }
+>     E   = er :* Wg[idx, .]
+>     num = cross(xt, E)
+>     U   = E - Z * (Zi * cross(Z, E))
+>     S   = xt :* U
+>     ss  = J(1, B, 0)
+>     for (g = 1; g <= G; g++) {
+>         ss = ss + colsum(panelsubmatrix(S, g, info)) :^ 2
+>     }
+>     p = sum(abs(num :/ sqrt(ss)) :>= abs(t0) * (1 - 1e-10)) / B
+>     return((p, t0, bj))
+> }
+
+: end
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+. 
+. *------------------------------------------------------------------------------
+. * 2. STATA PROGRAMS
+. *------------------------------------------------------------------------------
+. * 2a. winsor7: winsorize varname at p1/p99 of the rows where samp==1 (type 7), keep original
+. capture program drop winsor7
+
+. program define winsor7
+  1.     syntax varname, GENerate(name) SAMP(varname)
+  2.     local v `varlist'
+  3.     mata: st_numscalar("__lo", q7(st_data(., "`v'", "`samp'"), 0.01))
+  4.     mata: st_numscalar("__hi", q7(st_data(., "`v'", "`samp'"), 0.99))
+  5.     quietly gen double `generate' = `v'
+  6.     quietly replace `generate' = scalar(__lo) if `v' < scalar(__lo) & !missing(`v')
+  7.     quietly replace `generate' = scalar(__hi) if `v' > scalar(__hi) & !missing(`v')
+  8.     quietly count if `samp' == 1 & `v' < scalar(__lo) & !missing(`v')
+  9.     local nlo = r(N)
+ 10.     quietly count if `samp' == 1 & `v' > scalar(__hi) & !missing(`v')
+ 11.     local nhi = r(N)
+ 12.     quietly count if `samp' == 1 & !missing(`v')
+ 13.     local nn = r(N)
+ 14.     post cuts ("`v'") ("`generate'") (scalar(__lo)) (scalar(__hi)) (`nn') (`nlo') (`nhi')
+ 15.     di as text %-16s "`generate'" "  p01 = " %12.6f scalar(__lo) "  p99 = " %12.6f scalar(__hi) "   clipped low/high in sample: `nlo' / `nhi'"
+ 16. end
+
+. 
+. * 2b. do_twfe: one two-way FE model (firm and year dummies = least-squares dummy variables, LSDV),
+. *     all inference variants, one row per coefficient.
+. *     args: mid  label  depvar  regressors(first = financial-constraint variable)  sample-condition  bootall
+. *     The LSDV slopes equal the within estimator; singleton firms stay in the sample (D19).
+. capture program drop do_twfe
+
+. program define do_twfe
+  1.     args mid mlabel yv xl scnd bootall
+  2. 
+.     capture drop _u _tu _es _nf _tag _yy
+  3.     capture drop _xr*
+  4.     capture drop _fd* _yd*
+  5.     local k : word count `xl'
+  6.     gen byte _tu = (`scnd')
+  7.     global mlab`mid' "`mlabel'"
+  8. 
+.     * (i) conventional (non-robust) covariance
+.     quietly regress `yv' `xl' i.firm i.year if _tu
+  9.     matrix Vn = e(V)
+ 10.     local dfr = e(df_r)
+ 11. 
+.     * (ii) total within sum of squares = residual SS of y on the dummies alone (for within R2)
+.     quietly regress `yv' i.firm i.year if _tu
+ 12.     local rss0 = e(rss)
+ 13. 
+.     * (iii) regressors partialled out of the firm and year dummies (for the CR0 sandwich)
+.     local xr ""
+ 14.     local i = 0
+ 15.     foreach x of local xl {
+ 16.         local ++i
+ 17.         quietly regress `x' i.firm i.year if _tu
+ 18.         quietly predict double _xr`i' if e(sample), residuals
+ 19.         local xr "`xr' _xr`i'"
+ 20.     }
+ 21. 
+.     * (iv) main estimate, Stata firm-clustered SE: CR1 = G/(G-1) x (N-1)/(N-K), K = all estimated parameters
+.     quietly regress `yv' `xl' i.firm i.year if _tu, vce(cluster firm)
+ 22.     matrix b  = e(b)
+ 23.     matrix Vr = e(V)
+ 24.     local N = e(N)
+ 25.     local Krank = `N' - `dfr'     // number of estimated parameters K = N - df_r of the non-robust fit (e(rank) is the rank of V, not K)
+ 26.     scalar r2w = 1 - e(rss) / `rss0'
+ 27.     quietly predict double _u if e(sample), residuals
+ 28.     gen byte _es = e(sample)
+ 29.     egen _nf  = total(_es), by(firm)
+ 30.     egen _tag = tag(firm) if _es
+ 31.     egen _yy  = tag(year) if _es
+ 32.     quietly count if _tag == 1
+ 33.     local G24 = r(N)
+ 34.     quietly count if _tag == 1 & _nf >= 2
+ 35.     local G22 = r(N)
+ 36.     quietly count if _yy == 1
+ 37.     local Ny = r(N)
+ 38. 
+.     * (v) CR0 sandwich (no small-sample factor) from the partialled regressors and residuals
+.     mata: st_matrix("V0", cr0v("`xr'", "_u", "firm", "_tu"))
+ 39. 
+.     * (vi) wild cluster bootstrap (restricted, Rademacher) coded in Mata, on this LSDV regression.
+.     *      Mata design = regressors + firm dummies + year dummies (first level of each dropped) + constant,
+.     *      i.e. the same column space as regress in (iv), so its column count must equal K = N - df_r.
+.     quietly tab firm if _es, gen(_fd)
+ 40.     local nfd = r(r)
+ 41.     quietly tab year if _es, gen(_yd)
+ 42.     local nyd = r(r)
+ 43.     local dl ""
+ 44.     forvalues i = 2/`nfd' {
+ 45.         local dl "`dl' _fd`i'"
+ 46.     }
+ 47.     forvalues i = 2/`nyd' {
+ 48.         local dl "`dl' _yd`i'"
+ 49.     }
+ 50.     local Kdes = `k' + `nfd' + `nyd' - 1
+ 51.     if `Krank' != `Kdes' {
+ 52.         di as error "Design mismatch in model `mid': regress estimated `Krank' parameters, bootstrap design has `Kdes'"
+ 53.         exit 459
+ 54.     }
+ 55.     local nb = cond(`bootall', `k', 1)
+ 56.     forvalues j = 1/`nb' {
+ 57.         local x : word `j' of `xl'
+ 58.         mata: st_matrix("WB", wcb("`yv'", "`xl'", "`dl'", "firm", "_es", `j', $BOOT_REPS, $BOOT_SEED))
+ 59.         scalar chk = max(abs(WB[1, 2] - b[1, `j'] / sqrt(V0[`j', `j'])), abs(WB[1, 3] - b[1, `j']))
+ 60.         if scalar(chk) > 1e-5 {
+ 61.             di as error "WARNING model `mid', `x': Mata t or beta differs from regress by " scalar(chk) "; wild p-value set to missing"
+ 62.             scalar pw`j' = .
+ 63.         }
+ 64.         else {
+ 65.             scalar pw`j' = WB[1, 1]
+ 66.         }
+ 67.     }
+ 68.     forvalues j = `=`nb' + 1'/`k' {
+ 69.         scalar pw`j' = .
+ 70.     }
+ 71. 
+.     * (vii) post one row per coefficient (results) and formatted cells (tables)
+.     local vorder "sa fc_dummy sa_lag size_ln_w roa_w lev_w tq_w growth_w growth_w197 cash_w"
+ 72.     local j = 0
+ 73.     foreach x of local xl {
+ 74.         local ++j
+ 75.         scalar bj  = b[1, `j']
+ 76.         scalar sej = sqrt(Vr[`j', `j'])
+ 77.         scalar pj  = 2 * ttail(`G22' - 1, abs(bj / sej))
+ 78.         local star = cond(pj < 0.01, "***", cond(pj < 0.05, "**", cond(pj < 0.1, "*", "")))
+ 79.         post res (`mid') ("`mlabel'") ("`yv'") ("`x'") (scalar(bj)) (sqrt(Vn[`j', `j'])) (sqrt(V0[`j', `j'])) (scalar(sej)) (scalar(pw`j')) (`N') (`k') (`G
+> 22') (`G24') (`Ny') (scalar(r2w)) (`dfr')
+ 80.         local o : list posof "`x'" in vorder
+ 81.         local lab "`x'"
+ 82.         if "`x'" == "sa"          local lab "SA Index"
+ 83.         if "`x'" == "fc_dummy"    local lab "SA dummy (above sample median)"
+ 84.         if "`x'" == "sa_lag"      local lab "SA Index (t-1)"
+ 85.         if "`x'" == "size_ln_w"   local lab "SIZE (ln total assets)"
+ 86.         if "`x'" == "roa_w"       local lab "ROA"
+ 87.         if "`x'" == "lev_w"       local lab "LEV"
+ 88.         if "`x'" == "tq_w"        local lab "TQ"
+ 89.         if "`x'" == "growth_w"    local lab "GROWTH"
+ 90.         if "`x'" == "growth_w197" local lab "GROWTH (winsorized on 197 rows)"
+ 91.         if "`x'" == "cash_w"      local lab "CASH"
+ 92.         local cb  = string(scalar(bj), "%9.4f") + "`star'"
+ 93.         local cse = "(" + string(scalar(sej), "%9.4f") + ")"
+ 94.         local ob  = 10 * `o'
+ 95.         local ose = 10 * `o' + 1
+ 96.         post cells (`mid') (`ob')  ("`lab'") ("`cb'")
+ 97.         post cells (`mid') (`ose') ("") ("`cse'")
+ 98.     }
+ 99.     post cells (`mid') (9001) ("Observations") (string(`N', "%9.0f"))
+100.     post cells (`mid') (9002) ("Firms (with >= 2 obs.)") ("`G24' (`G22')")
+101.     post cells (`mid') (9003) ("Within R2") (string(scalar(r2w), "%9.3f"))
+102.     post cells (`mid') (9004) ("FC variable: p-value, t(G-1)") (string(2 * ttail(`G22' - 1, abs(b[1, 1] / sqrt(Vr[1, 1]))), "%9.3f"))
+103.     post cells (`mid') (9005) ("FC variable: p-value, wild cluster bootstrap") (string(scalar(pw1), "%9.3f"))
+104. 
+.     di as text "model `mid' [`mlabel']: N = `N', firms = `G24' (`G22' with >= 2 obs), years = `Ny', first coefficient = " %9.4f b[1, 1]
+105.     capture drop _u _tu _es _nf _tag _yy
+106.     capture drop _xr*
+107.     capture drop _fd* _yd*
+108.     sort firm year
+109. end
+
+. 
+. * 2c. do_re: random firm effects + year dummies (A13), same arguments as do_twfe without bootall.
+. *     Posts one row per coefficient to the open postfile resre and formatted cells to cells.
+. capture program drop do_re
+
+. program define do_re
+  1.     args mid mlabel yv xl scnd
+  2. 
+.     capture drop _tu _es _nf _tag _yy
+  3.     local k : word count `xl'
+  4.     gen byte _tu = (`scnd')
+  5.     global mlab`mid' "`mlabel'"
+  6. 
+.     * (i) conventional covariance (no clustering)
+.     quietly xtreg `yv' `xl' i.year if _tu, re
+  7.     matrix Vn = e(V)
+  8. 
+.     * (ii) main estimate: firm-clustered covariance, Stata's xtreg convention
+.     quietly xtreg `yv' `xl' i.year if _tu, re vce(cluster firm)
+  9.     matrix b  = e(b)
+ 10.     matrix Vr = e(V)
+ 11.     local N  = e(N)
+ 12.     local Gc = e(N_clust)
+ 13.     scalar r2w = e(r2_w)
+ 14.     scalar r2o = e(r2_o)
+ 15.     gen byte _es = e(sample)
+ 16.     egen _nf  = total(_es), by(firm)
+ 17.     egen _tag = tag(firm) if _es
+ 18.     egen _yy  = tag(year) if _es
+ 19.     quietly count if _tag == 1
+ 20.     local G24 = r(N)
+ 21.     quietly count if _tag == 1 & _nf >= 2
+ 22.     local G22 = r(N)
+ 23.     quietly count if _yy == 1
+ 24.     local Ny = r(N)
+ 25.     local dfnk = `N' - (`k' + `Ny')     // K = slopes + constant + (Ny - 1) year dummies
+ 26.     if `Gc' != `G24' {
+ 27.         di as error "Model `mid': e(N_clust) = `Gc' but the sample has `G24' firms"
+ 28.         exit 459
+ 29.     }
+ 30. 
+.     local vorder "sa fc_dummy sa_lag size_ln_w roa_w lev_w tq_w growth_w growth_w197 cash_w"
+ 31.     local j = 0
+ 32.     foreach x of local xl {
+ 33.         local ++j
+ 34.         scalar bj  = b[1, `j']
+ 35.         scalar sej = sqrt(Vr[`j', `j'])
+ 36.         scalar tj  = bj / sej
+ 37.         scalar pz  = 2 * normal(-abs(tj))
+ 38.         scalar pg  = 2 * ttail(`G24' - 1, abs(tj))
+ 39.         scalar pnk = 2 * ttail(`dfnk', abs(tj))
+ 40.         local star = cond(scalar(pg) < 0.01, "***", cond(scalar(pg) < 0.05, "**", cond(scalar(pg) < 0.1, "*", "")))
+ 41.         post resre (`mid') ("`mlabel'") ("`yv'") ("`x'") (scalar(bj)) (sqrt(Vn[`j', `j'])) (scalar(sej)) (scalar(pz)) (scalar(pg)) (scalar(pnk)) (`N') (`k'
+> ) (`G24') (`G22') (`Ny') (`dfnk') (scalar(r2w)) (scalar(r2o))
+ 42.         local o : list posof "`x'" in vorder
+ 43.         local lab "`x'"
+ 44.         if "`x'" == "sa"          local lab "SA Index"
+ 45.         if "`x'" == "fc_dummy"    local lab "SA dummy (above sample median)"
+ 46.         if "`x'" == "sa_lag"      local lab "SA Index (t-1)"
+ 47.         if "`x'" == "size_ln_w"   local lab "SIZE (ln total assets)"
+ 48.         if "`x'" == "roa_w"       local lab "ROA"
+ 49.         if "`x'" == "lev_w"       local lab "LEV"
+ 50.         if "`x'" == "tq_w"        local lab "TQ"
+ 51.         if "`x'" == "growth_w"    local lab "GROWTH"
+ 52.         if "`x'" == "growth_w197" local lab "GROWTH (winsorized on 197 rows)"
+ 53.         if "`x'" == "cash_w"      local lab "CASH"
+ 54.         post cells (`mid') (10 * `o')     ("`lab'") (string(scalar(bj), "%9.4f") + "`star'")
+ 55.         post cells (`mid') (10 * `o' + 1) ("")      ("(" + string(scalar(sej), "%9.4f") + ")")
+ 56.     }
+ 57.     post cells (`mid') (9001) ("Observations") (string(`N', "%9.0f"))
+ 58.     post cells (`mid') (9002) ("Firms (with >= 2 obs.)") ("`G24' (`G22')")
+ 59.     post cells (`mid') (9003) ("Within R2") (string(scalar(r2w), "%9.3f"))
+ 60.     post cells (`mid') (9006) ("Overall R2 (RE)") (string(scalar(r2o), "%9.3f"))
+ 61.     post cells (`mid') (9007) ("FC variable: p-value, t(G-1), G = all firms (RE)") (string(2 * ttail(`G24' - 1, abs(b[1, 1] / sqrt(Vr[1, 1]))), "%9.4f"))
+ 62.     post cells (`mid') (9008) ("FC variable: p-value, z (Stata xtreg, re output)") (string(2 * normal(-abs(b[1, 1] / sqrt(Vr[1, 1]))), "%9.4f"))
+ 63. 
+.     di as text "RE model `mid' [`mlabel']: N = `N', clusters = `G24', first coefficient = " %9.4f b[1, 1] "  SE = " %9.4f sqrt(Vr[1, 1])
+ 64.     capture drop _tu _es _nf _tag _yy
+ 65.     sort firm year
+ 66. end
+
+. 
+. * 2d. export_table: wide table (coefficient and SE rows, models in columns) to .xlsx
+. capture program drop export_table
+
+. program define export_table
+  1.     args fname idlist
+  2.     preserve
+  3.     use "$OUT/stata_cells.dta", clear
+  4.     gen byte keepme = 0
+  5.     foreach i of local idlist {
+  6.         replace keepme = 1 if mid == `i'
+  7.     }
+  8.     keep if keepme == 1
+  9.     drop keepme
+ 10.     reshape wide cell, i(ord lbl) j(mid)
+ 11.     sort ord
+ 12.     drop ord
+ 13.     label variable lbl "Dependent variable / regressor"
+ 14.     foreach i of local idlist {
+ 15.         label variable cell`i' "${mlab`i'}"
+ 16.     }
+ 17.     export excel using "$OUT/`fname'.xlsx", firstrow(varlabels) replace
+ 18.     restore
+ 19. end
+
+. 
+. *------------------------------------------------------------------------------
+. * 3. LOAD THE MASTER PANEL (A1)
+. *------------------------------------------------------------------------------
+. import delimited using "$ROOT/data_clean/panel_merged.csv", clear varnames(1) stringcols(1) encoding("utf-8")
+(54 vars, 250 obs)
+
+. 
+. local need stock_code year market_ifrs equity total_assets total_liabilities cash_amt revenue net_income_consol mcap_m usd_ntd founding_year tesg e s g in_sam
+> ple
+
+. foreach v of local need {
+  2.     capture confirm variable `v'
+  3.     if _rc {
+  4.         di as error "Variable `v' is missing from panel_merged.csv"
+  5.         exit 111
+  6.     }
+  7. }
+
+. foreach v in year equity total_assets total_liabilities cash_amt revenue net_income_consol mcap_m usd_ntd founding_year tesg e s g {
+  2.     capture confirm numeric variable `v'
+  3.     if _rc {
+  4.         di as error "`v' was not imported as numeric. Open the CSV and check for text in that column."
+  5.         exit 109
+  6.     }
+  7.     recast double `v'
+  8. }
+
+. rename (e s g) (tesg_e tesg_s tesg_g)
+
+. 
+. rename firm firm_label          // raw text label in the CSV (e.g. 1201-name); frees the name firm for the numeric id
+
+. encode stock_code, gen(firm)
+
+. sort firm year
+
+. isid firm year
+
+. xtset firm year
+       panel variable:  firm (unbalanced)
+        time variable:  year, 2015 to 2025
+                delta:  1 unit
+
+. di as text "Master rows: " _N "   firms: " r(imax)
+Master rows: 250   firms: 24
+
+. 
+. *------------------------------------------------------------------------------
+. * 4. SAMPLE (A2)
+. *------------------------------------------------------------------------------
+. gen byte my_sample = inrange(year, 2016, 2025) & market_ifrs == "TSE" & !missing(equity) & equity > 0 & !missing(tesg)
+
+. quietly count if my_sample
+
+. di as text "Rows in estimation sample: " r(N) "  (expected 219)"
+Rows in estimation sample: 219  (expected 219)
+
+. assert r(N) == 219
+
+. quietly levelsof firm if my_sample, local(flist)
+
+. local nfirm : word count `flist'
+
+. di as text "Firms in estimation sample: `nfirm'  (expected 24)"
+Firms in estimation sample: 24  (expected 24)
+
+. assert `nfirm' == 24
+
+. quietly count if my_sample != (in_sample == 1)
+
+. di as text "Rows where my_sample differs from the merge-file flag in_sample: " r(N) "  (expected 0)"
+Rows where my_sample differs from the merge-file flag in_sample: 0  (expected 0)
+
+. tab year my_sample
+
+           |       my_sample
+      year |         0          1 |     Total
+-----------+----------------------+----------
+      2015 |        22          0 |        22 
+      2016 |         0         22 |        22 
+      2017 |         0         22 |        22 
+      2018 |         0         22 |        22 
+      2019 |         0         22 |        22 
+      2020 |         0         22 |        22 
+      2021 |         0         22 |        22 
+      2022 |         2         22 |        24 
+      2023 |         2         22 |        24 
+      2024 |         2         22 |        24 
+      2025 |         3         21 |        24 
+-----------+----------------------+----------
+     Total |        31        219 |       250 
+
+
+. 
+. *------------------------------------------------------------------------------
+. * 5. VARIABLES (A4, A5), on all 250 rows so that 2015 rows can serve as t-1 input
+. *------------------------------------------------------------------------------
+. gen double size_usd = ln(total_assets / 1000 / usd_ntd)
+
+. gen double age_yr   = year - founding_year
+
+. gen double size_ln  = ln(total_assets)
+
+. gen double roa      = net_income_consol / total_assets
+
+. gen double lev      = total_liabilities / total_assets
+
+. gen double tq       = (mcap_m * 1000 + total_liabilities) / total_assets
+(4 missing values generated)
+
+. gen double cash     = cash_amt / total_assets
+
+. by firm: gen double rev_l = revenue[_n - 1] if year == year[_n - 1] + 1
+(24 missing values generated)
+
+. gen double growth   = (revenue - rev_l) / rev_l
+(24 missing values generated)
+
+. 
+. quietly count if my_sample & missing(growth)
+
+. di as text "GROWTH missing in estimation sample: " r(N) "  (expected 0 once 2015 revenue is used as t-1)"
+GROWTH missing in estimation sample: 0  (expected 0 once 2015 revenue is used as t-1)
+
+. 
+. *------------------------------------------------------------------------------
+. * 6. WINSORIZE (A6) and SA INDEX (A7)
+. *------------------------------------------------------------------------------
+. postfile cuts str32 source str32 target double(p01 p99 n_sample n_low n_high) using "$OUT/stata_cutoffs.dta", replace
+
+. winsor7 size_usd, generate(size_usd_w) samp(my_sample)
+size_usd_w        p01 =     3.269269  p99 =     9.943014   clipped low/high in sample: 3 / 3
+
+. winsor7 age_yr,   generate(age_w)      samp(my_sample)
+age_w             p01 =     7.180000  p99 =    73.820000   clipped low/high in sample: 3 / 3
+
+. winsor7 roa,      generate(roa_w)      samp(my_sample)
+roa_w             p01 =    -0.070505  p99 =     0.216555   clipped low/high in sample: 3 / 3
+
+. winsor7 lev,      generate(lev_w)      samp(my_sample)
+lev_w             p01 =     0.117691  p99 =     0.733724   clipped low/high in sample: 3 / 3
+
+. winsor7 tq,       generate(tq_w)       samp(my_sample)
+tq_w              p01 =     0.758871  p99 =     3.586884   clipped low/high in sample: 3 / 3
+
+. winsor7 growth,   generate(growth_w)   samp(my_sample)
+growth_w          p01 =    -0.333283  p99 =     0.560425   clipped low/high in sample: 3 / 3
+
+. winsor7 cash,     generate(cash_w)     samp(my_sample)
+cash_w            p01 =     0.001917  p99 =     0.412689   clipped low/high in sample: 3 / 3
+
+. winsor7 size_ln,  generate(size_ln_w)  samp(my_sample)
+size_ln_w         p01 =    13.623113  p99 =    20.282662   clipped low/high in sample: 3 / 3
+
+. winsor7 tesg,     generate(tesg_w)     samp(my_sample)
+tesg_w            p01 =    36.239000  p99 =    76.511000   clipped low/high in sample: 3 / 3
+
+. winsor7 tesg_e,   generate(tesg_e_w)   samp(my_sample)
+tesg_e_w          p01 =    30.806000  p99 =    85.324800   clipped low/high in sample: 3 / 3
+
+. winsor7 tesg_s,   generate(tesg_s_w)   samp(my_sample)
+tesg_s_w          p01 =    38.856600  p99 =    85.098200   clipped low/high in sample: 3 / 3
+
+. winsor7 tesg_g,   generate(tesg_g_w)   samp(my_sample)
+tesg_g_w          p01 =    30.926800  p99 =    72.615600   clipped low/high in sample: 3 / 3
+
+. gen byte lit_s = my_sample & year >= 2017
+
+. winsor7 growth,   generate(growth_w197) samp(lit_s)
+growth_w197       p01 =    -0.352930  p99 =     0.561301   clipped low/high in sample: 2 / 2
+
+. postclose cuts
+
+. 
+. gen double sa = -0.737 * size_usd_w + 0.043 * size_usd_w^2 - 0.040 * age_w
+
+. by firm: gen double sa_lag = sa[_n - 1] if year == year[_n - 1] + 1
+(24 missing values generated)
+
+. 
+. quietly count if sa >= 0 & !missing(sa)
+
+. di as text "SA >= 0 on any row: " r(N) "  (expected 0; a positive SA signals a unit error)"
+SA >= 0 on any row: 0  (expected 0; a positive SA signals a unit error)
+
+. assert r(N) == 0
+
+. quietly correlate sa size_usd_w if my_sample
+
+. di as text "corr(SA, Size_w) in sample = " %7.4f r(rho) "  (expected negative)"
+corr(SA, Size_w) in sample = -0.5865  (expected negative)
+
+. quietly count if my_sample & missing(sa_lag)
+
+. di as text "SA lag missing in estimation sample: " r(N) "  (expected 0)"
+SA lag missing in estimation sample: 0  (expected 0)
+
+. 
+. quietly summarize sa if my_sample, detail
+
+. scalar sa_median = r(p50)
+
+. gen byte fc_dummy = (sa > scalar(sa_median)) if my_sample
+(31 missing values generated)
+
+. quietly count if fc_dummy == 1
+
+. di as text "SA median (sample) = " %9.4f scalar(sa_median) "; fc_dummy = 1 for " r(N) " firm-years"
+SA median (sample) =   -4.7612; fc_dummy = 1 for 109 firm-years
+
+. 
+. *------------------------------------------------------------------------------
+. * 7. TABLE 1, 2, 3 (brief 4.5, 6.3)
+. *------------------------------------------------------------------------------
+. preserve
+
+. keep if my_sample
+(31 observations deleted)
+
+. gen byte lit = year >= 2017
+
+. collapse (count) firm_years = tesg (sum) lit_years = lit, by(year)
+
+. export delimited using "$OUT/stata_table1_sample_by_year.csv", replace
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_table1_sample_by_year.csv saved
+
+. save "$OUT/stata_table1_sample_by_year.dta", replace
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_table1_sample_by_year.dta saved
+
+. list, noobs sep(0)
+
+  +----------------------------+
+  | year   firm_y~s   lit_ye~s |
+  |----------------------------|
+  | 2016         22          0 |
+  | 2017         22         22 |
+  | 2018         22         22 |
+  | 2019         22         22 |
+  | 2020         22         22 |
+  | 2021         22         22 |
+  | 2022         22         22 |
+  | 2023         22         22 |
+  | 2024         22         22 |
+  | 2025         21         21 |
+  +----------------------------+
+
+. restore
+
+. 
+. postfile t2 str16 variable double(N mean sd vmin p50 vmax) using "$OUT/stata_table2_descriptive.dta", replace
+
+. foreach v in tesg_w sa roa_w lev_w tq_w growth_w cash_w {
+  2.     quietly summarize `v' if my_sample, detail
+  3.     post t2 ("`v'") (r(N)) (r(mean)) (r(sd)) (r(min)) (r(p50)) (r(max))
+  4. }
+
+. postclose t2
+
+. preserve
+
+. use "$OUT/stata_table2_descriptive.dta", clear
+
+. export delimited using "$OUT/stata_table2_descriptive.csv", replace
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_table2_descriptive.csv saved
+
+. list, noobs sep(0)
+
+  +--------------------------------------------------------------------------------+
+  | variable     N         mean          sd         vmin          p50         vmax |
+  |--------------------------------------------------------------------------------|
+  |   tesg_w   219    60.546758   9.2272302       36.239        61.85       76.511 |
+  |       sa   219   -4.7654354   .73528924   -6.0019243   -4.7611986   -2.5399228 |
+  |    roa_w   219    .05572592   .04949127   -.07050484    .05108889     .2165549 |
+  |    lev_w   219    .40121693   .16735862    .11769061    .38420557    .73372358 |
+  |     tq_w   219    1.4521326   .65827057     .7588708    1.2456372    3.5868838 |
+  | growth_w   219    .03739077   .13496827   -.33328337    .02477936    .56042457 |
+  |   cash_w   219    .11466568   .08891467    .00191747    .09934192    .41268891 |
+  +--------------------------------------------------------------------------------+
+
+. restore
+
+. 
+. local m1 sa roa_w lev_w tq_w growth_w cash_w
+
+. local m2 `m1' size_ln_w
+
+. quietly correlate tesg_w `m2' if my_sample
+
+. matrix C = r(C)
+
+. local nflag = 0
+
+. local kk = rowsof(C)
+
+. forvalues i = 1/`kk' {
+  2.     forvalues j = 1/`=`i' - 1' {
+  3.         if abs(C[`i', `j']) > 0.7 local ++nflag
+  4.     }
+  5. }
+
+. di as text "Pairs with |r| > 0.7 (Table 3): `nflag'"
+Pairs with |r| > 0.7 (Table 3): 0
+
+. local rn : rownames C
+
+. preserve
+
+. clear
+
+. svmat double C, names(col)
+number of observations will be reset to 8
+Press any key to continue, or Break to abort
+number of observations (_N) was 0, now 8
+
+. gen str20 variable = ""
+(8 missing values generated)
+
+. local i = 0
+
+. foreach r of local rn {
+  2.     local ++i
+  3.     replace variable = "`r'" in `i'
+  4. }
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+
+. order variable
+
+. export delimited using "$OUT/stata_table3_correlation.csv", replace
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_table3_correlation.csv saved
+
+. restore
+
+. 
+. * pooled VIF: regress each regressor on the others, constant included (brief 4.5, 5.4)
+. postfile vf str16 variable double(vif_m1 vif_m2) using "$OUT/stata_vif.dta", replace
+
+. foreach v of local m2 {
+  2.     local o1 : list m1 - v
+  3.     local o2 : list m2 - v
+  4.     scalar v1 = .
+  5.     if `: list v in m1' {
+  6.         quietly regress `v' `o1' if my_sample
+  7.         scalar v1 = 1 / (1 - e(r2))
+  8.     }
+  9.     quietly regress `v' `o2' if my_sample
+ 10.     scalar v2 = 1 / (1 - e(r2))
+ 11.     post vf ("`v'") (scalar(v1)) (scalar(v2))
+ 12. }
+
+. postclose vf
+
+. preserve
+
+. use "$OUT/stata_vif.dta", clear
+
+. export delimited using "$OUT/stata_table3_vif.csv", replace
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_table3_vif.csv saved
+
+. list, noobs sep(0)
+
+  +-----------------------------------+
+  |  variable      vif_m1      vif_m2 |
+  |-----------------------------------|
+  |        sa   1.4300831   1.9655235 |
+  |     roa_w   2.1304822   2.3687085 |
+  |     lev_w   1.4150711   1.5215811 |
+  |      tq_w   2.0641204    2.092741 |
+  |  growth_w   1.0607761   1.0619499 |
+  |    cash_w   1.3222481   1.3240176 |
+  | size_ln_w           .   1.8216859 |
+  +-----------------------------------+
+
+. restore
+
+. 
+. *------------------------------------------------------------------------------
+. * 8. HAUSMAN (brief 3.2) AND MUNDLAK CHECK (A10)
+. *------------------------------------------------------------------------------
+. local X6 sa roa_w lev_w tq_w growth_w cash_w
+
+. quietly xtreg tesg_w `X6' i.year if my_sample, fe
+
+. matrix bF = e(b)
+
+. matrix VF = e(V)
+
+. quietly xtreg tesg_w `X6' i.year if my_sample, re
+
+. matrix bR = e(b)
+
+. matrix VR = e(V)
+
+. matrix bF6 = bF[1, 1..6]
+
+. matrix bR6 = bR[1, 1..6]
+
+. matrix VF6 = VF[1..6, 1..6]
+
+. matrix VR6 = VR[1..6, 1..6]
+
+. matrix dd = bF6 - bR6
+
+. matrix Vd = VF6 - VR6
+
+. matrix Hm = dd * inv(Vd) * dd'
+
+. scalar Hstat = Hm[1, 1]
+
+. scalar pH = chi2tail(6, Hstat)
+
+. matrix symeigen EVEC EVAL = Vd
+
+. scalar mineig = EVAL[1, 1]
+
+. forvalues i = 1/6 {
+  2.     scalar mineig = min(scalar(mineig), EVAL[1, `i'])
+  3. }
+
+. di as text "Hausman (classic): H = " %8.4f scalar(Hstat) "  df = 6  p = " %7.4f scalar(pH) "  min eigenvalue of V_FE - V_RE = " %12.4e scalar(mineig)
+Hausman (classic): H =   2.9411  df = 6  p =  0.8162  min eigenvalue of V_FE - V_RE =   2.6425e-02
+
+. if scalar(mineig) <= 0 | scalar(Hstat) < 0 {
+.     di as error "V_FE - V_RE is not positive definite: do not report H as a valid test."
+. }
+
+. 
+. foreach x of local X6 {
+  2.     egen double mm_`x' = mean(`x') if my_sample, by(firm)
+  3. }
+(31 missing values generated)
+(31 missing values generated)
+(31 missing values generated)
+(31 missing values generated)
+(31 missing values generated)
+(31 missing values generated)
+
+. quietly xtreg tesg_w `X6' mm_* i.year if my_sample, re vce(cluster firm)
+
+. quietly test mm_sa mm_roa_w mm_lev_w mm_tq_w mm_growth_w mm_cash_w
+
+. scalar chi_mund = r(chi2)
+
+. scalar p_mund = r(p)
+
+. di as text "Mundlak (firm-clustered Wald, 6 firm means): chi2(6) = " %8.4f scalar(chi_mund) "  p = " %7.4f scalar(p_mund)
+Mundlak (firm-clustered Wald, 6 firm means): chi2(6) =   3.2540  p =  0.7764
+
+. 
+. postfile hb str16 variable double(b_fe b_re diff se_fe se_re) using "$OUT/stata_hausman_coef.dta", replace
+
+. local j = 0
+
+. foreach x of local X6 {
+  2.     local ++j
+  3.     post hb ("`x'") (bF6[1, `j']) (bR6[1, `j']) (dd[1, `j']) (sqrt(VF6[`j', `j'])) (sqrt(VR6[`j', `j']))
+  4. }
+
+. postclose hb
+
+. postfile ht str16 test double(stat df p min_eig) using "$OUT/stata_hausman_tests.dta", replace
+
+. post ht ("Hausman") (scalar(Hstat)) (6) (scalar(pH)) (scalar(mineig))
+
+. post ht ("Mundlak") (scalar(chi_mund)) (6) (scalar(p_mund)) (.)
+
+. postclose ht
+
+. preserve
+
+. use "$OUT/stata_hausman_coef.dta", clear
+
+. export delimited using "$OUT/stata_hausman_coef.csv", replace
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_hausman_coef.csv saved
+
+. list, noobs sep(0)
+
+  +-------------------------------------------------------------------------+
+  | variable         b_fe         b_re         diff       se_fe       se_re |
+  |-------------------------------------------------------------------------|
+  |       sa    2.2445533   -4.8047936    7.0493469   6.5635675   2.1337565 |
+  |    roa_w    1.0480376    3.9949904   -2.9469528   11.231108   10.922341 |
+  |    lev_w   -8.8514838   -7.3271293   -1.5243546   4.1856026   3.9724786 |
+  |     tq_w    .79265678    .85097696   -.05832018    .8874424   .86268847 |
+  | growth_w    -3.599474   -3.3011229   -.29835116   2.3761734   2.3029194 |
+  |   cash_w    7.3288765    8.7124694   -1.3835929    6.463981   6.1695835 |
+  +-------------------------------------------------------------------------+
+
+. use "$OUT/stata_hausman_tests.dta", clear
+
+. export delimited using "$OUT/stata_hausman_tests.csv", replace
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_hausman_tests.csv saved
+
+. list, noobs sep(0)
+
+  +--------------------------------------------------+
+  |    test        stat   df           p     min_eig |
+  |--------------------------------------------------|
+  | Hausman   2.9411235    6   .81619938   .02642474 |
+  | Mundlak   3.2540305    6   .77635404           . |
+  +--------------------------------------------------+
+
+. restore
+
+. sort firm year
+
+. 
+. *------------------------------------------------------------------------------
+. * 9. TABLES 4, 5, 6: two-way FE models (brief 3.3, 5.1 to 5.4)
+. *------------------------------------------------------------------------------
+. postfile res int mid str40 model str16 yvar str16 variable double(beta se_unadj se_cr0 se_clust pwild) ///
+>     int(N k G22 G24 Ny) double(r2w df_unadj) using "$OUT/stata_results_long.dta", replace
+
+. postfile resre int mid str40 model str16 yvar str16 variable double(beta se_conv se_clust p_z p_tG1 p_tNK) ///
+>     int(N k G G22 Ny df_nk) double(r2w r2o) using "$OUT/stata_results_re.dta", replace
+(note: file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_results_re.dta not found)
+
+. postfile cells double mid double ord str60 lbl str40 cell using "$OUT/stata_cells.dta", replace
+
+. 
+. local X6 sa roa_w lev_w tq_w growth_w cash_w
+
+. local C5 roa_w lev_w tq_w growth_w cash_w
+
+. 
+. do_twfe 1 "(1) Main"                       tesg_w   "`X6'"                                         "my_sample == 1"                 1
+model 1 [(1) Main]: N = 219, firms = 24 (22 with >= 2 obs), years = 10, first coefficient =    2.2446
+
+. do_twfe 2 "(2) Brief-literal"              tesg_w   "`X6'"                                         "my_sample == 1 & year >= 2017"  1
+model 2 [(2) Brief-literal]: N = 197, firms = 24 (22 with >= 2 obs), years = 9, first coefficient =    0.4553
+
+. do_twfe 3 "(2b) diag: growth w. on 197"    tesg_w   "sa roa_w lev_w tq_w growth_w197 cash_w"       "my_sample == 1 & year >= 2017"  1
+model 3 [(2b) diag: growth w. on 197]: N = 197, firms = 24 (22 with >= 2 obs), years = 9, first coefficient =    0.4073
+
+. do_twfe 4 "(2) SA dummy (5.1)"             tesg_w   "fc_dummy `C5'"                                "my_sample == 1"                 0
+model 4 [(2) SA dummy (5.1)]: N = 219, firms = 24 (22 with >= 2 obs), years = 10, first coefficient =   -3.1017
+
+. do_twfe 5 "(3) Lagged SA (5.3)"            tesg_w   "sa_lag `C5'"                                  "my_sample == 1"                 0
+model 5 [(3) Lagged SA (5.3)]: N = 219, firms = 24 (22 with >= 2 obs), years = 10, first coefficient =   10.5037
+
+. do_twfe 6 "(4) Model 2 + SIZE (5.4)"       tesg_w   "`X6' size_ln_w"                               "my_sample == 1"                 0
+model 6 [(4) Model 2 + SIZE (5.4)]: N = 219, firms = 24 (22 with >= 2 obs), years = 10, first coefficient =    4.8422
+
+. do_twfe 7 "E pillar (5.2)"                 tesg_e_w "`X6'"                                         "my_sample == 1"                 0
+model 7 [E pillar (5.2)]: N = 219, firms = 24 (22 with >= 2 obs), years = 10, first coefficient =   18.8687
+
+. do_twfe 8 "S pillar (5.2)"                 tesg_s_w "`X6'"                                         "my_sample == 1"                 0
+model 8 [S pillar (5.2)]: N = 219, firms = 24 (22 with >= 2 obs), years = 10, first coefficient =  -29.0469
+
+. do_twfe 9 "G pillar (5.2)"                 tesg_g_w "`X6'"                                         "my_sample == 1"                 0
+model 9 [G pillar (5.2)]: N = 219, firms = 24 (22 with >= 2 obs), years = 10, first coefficient =   25.8426
+
+. 
+. * Random effects (A13): id = FE id + 10. The brief-literal RE column uses GROWTH winsorized on the 197 rows,
+. * as Python does (A12), so it is paired with FE model 3, not model 2.
+. do_re 11 "(1) Main [RE]"                   tesg_w   "`X6'"                                         "my_sample == 1"
+RE model 11 [(1) Main [RE]]: N = 219, clusters = 24, first coefficient =   -4.8048  SE =    2.3200
+
+. do_re 13 "(2) Brief-literal [RE]"          tesg_w   "sa roa_w lev_w tq_w growth_w197 cash_w"       "my_sample == 1 & year >= 2017"
+RE model 13 [(2) Brief-literal [RE]]: N = 197, clusters = 24, first coefficient =   -5.2531  SE =    2.2705
+
+. do_re 14 "(2) SA dummy (5.1) [RE]"         tesg_w   "fc_dummy `C5'"                                "my_sample == 1"
+RE model 14 [(2) SA dummy (5.1) [RE]]: N = 219, clusters = 24, first coefficient =   -4.0163  SE =    2.9038
+
+. do_re 15 "(3) Lagged SA (5.3) [RE]"        tesg_w   "sa_lag `C5'"                                  "my_sample == 1"
+RE model 15 [(3) Lagged SA (5.3) [RE]]: N = 219, clusters = 24, first coefficient =   -3.7454  SE =    1.8545
+
+. do_re 16 "(4) Model 2 + SIZE (5.4) [RE]"   tesg_w   "`X6' size_ln_w"                               "my_sample == 1"
+RE model 16 [(4) Model 2 + SIZE (5.4) [RE]]: N = 219, clusters = 24, first coefficient =   -2.5187  SE =    2.1808
+
+. do_re 17 "E pillar (5.2) [RE]"             tesg_e_w "`X6'"                                         "my_sample == 1"
+RE model 17 [E pillar (5.2) [RE]]: N = 219, clusters = 24, first coefficient =   -6.0289  SE =    4.3039
+
+. do_re 18 "S pillar (5.2) [RE]"             tesg_s_w "`X6'"                                         "my_sample == 1"
+RE model 18 [S pillar (5.2) [RE]]: N = 219, clusters = 24, first coefficient =   -8.2741  SE =    2.3925
+
+. do_re 19 "G pillar (5.2) [RE]"             tesg_g_w "`X6'"                                         "my_sample == 1"
+RE model 19 [G pillar (5.2) [RE]]: N = 219, clusters = 24, first coefficient =   -0.3397  SE =    2.5264
+
+. 
+. postclose res
+
+. postclose resre
+
+. postclose cells
+
+. 
+. * Table 4 in the same column order as the Python Table 4: FE main, RE main, FE brief-literal, RE brief-literal
+. export_table stata_Table4_main_regression "1 11 3 13"
+(17 real changes made)
+(18 real changes made)
+(17 real changes made)
+(18 real changes made)
+(231 observations deleted)
+(note: j = 1 3 11 13)
+
+Data                               long   ->   wide
+-----------------------------------------------------------------------------
+Number of obs.                       70   ->      22
+Number of variables                   4   ->       6
+j variable (4 values)               mid   ->   (dropped)
+xij variables:
+                                   cell   ->   cell1 cell3 ... cell13
+-----------------------------------------------------------------------------
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_Table4_main_regression.xlsx saved
+
+. export_table stata_Table5_robustness      "1 4 5 6"
+(17 real changes made)
+(17 real changes made)
+(17 real changes made)
+(19 real changes made)
+(231 observations deleted)
+(note: j = 1 4 5 6)
+
+Data                               long   ->   wide
+-----------------------------------------------------------------------------
+Number of obs.                       70   ->      23
+Number of variables                   4   ->       6
+j variable (4 values)               mid   ->   (dropped)
+xij variables:
+                                   cell   ->   cell1 cell4 ... cell6
+-----------------------------------------------------------------------------
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_Table5_robustness.xlsx saved
+
+. export_table stata_Table6_esg_pillars     "1 7 8 9"
+(17 real changes made)
+(17 real changes made)
+(17 real changes made)
+(17 real changes made)
+(233 observations deleted)
+(note: j = 1 7 8 9)
+
+Data                               long   ->   wide
+-----------------------------------------------------------------------------
+Number of obs.                       68   ->      17
+Number of variables                   4   ->       6
+j variable (4 values)               mid   ->   (dropped)
+xij variables:
+                                   cell   ->   cell1 cell7 ... cell9
+-----------------------------------------------------------------------------
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_Table6_esg_pillars.xlsx saved
+
+. export_table stata_Table5_robustness_RE   "11 14 15 16"
+(18 real changes made)
+(18 real changes made)
+(18 real changes made)
+(20 real changes made)
+(227 observations deleted)
+(note: j = 11 14 15 16)
+
+Data                               long   ->   wide
+-----------------------------------------------------------------------------
+Number of obs.                       74   ->      24
+Number of variables                   4   ->       6
+j variable (4 values)               mid   ->   (dropped)
+xij variables:
+                                   cell   ->   cell11 cell14 ... cell16
+-----------------------------------------------------------------------------
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_Table5_robustness_RE.xlsx saved
+
+. export_table stata_Table6_esg_pillars_RE  "11 17 18 19"
+(18 real changes made)
+(18 real changes made)
+(18 real changes made)
+(18 real changes made)
+(229 observations deleted)
+(note: j = 11 17 18 19)
+
+Data                               long   ->   wide
+-----------------------------------------------------------------------------
+Number of obs.                       72   ->      18
+Number of variables                   4   ->       6
+j variable (4 values)               mid   ->   (dropped)
+xij variables:
+                                   cell   ->   cell11 cell17 ... cell19
+-----------------------------------------------------------------------------
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_Table6_esg_pillars_RE.xlsx saved
+
+. 
+. preserve
+
+. use "$OUT/stata_results_long.dta", clear
+
+. gen double t_clust = beta / se_clust
+
+. gen double p_t_G1    = 2 * ttail(G22 - 1, abs(t_clust))
+
+. gen double p_t_NK    = 2 * ttail(df_unadj, abs(t_clust))
+
+. export delimited using "$OUT/stata_results_long.csv", replace
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_results_long.csv saved
+
+. restore
+
+. 
+. preserve
+
+. use "$OUT/stata_results_re.dta", clear
+
+. export delimited using "$OUT/stata_results_re.csv", replace
+(note: file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_results_re.csv not found)
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_results_re.csv saved
+
+. list mid variable beta se_clust p_z p_tG1 if inlist(variable, "sa", "fc_dummy", "sa_lag"), noobs sep(0) abbreviate(10)
+
+  +-----------------------------------------------------------------+
+  | mid   variable         beta    se_clust         p_z       p_tG1 |
+  |-----------------------------------------------------------------|
+  |  11         sa   -4.8047936   2.3199584   .03835236   .04975496 |
+  |  13         sa   -5.2530847   2.2705057   .02068864   .02997513 |
+  |  14   fc_dummy   -4.0162941   2.9038405   .16663501    .1799156 |
+  |  15     sa_lag   -3.7453726   1.8545096   .04342461   .05522459 |
+  |  16         sa   -2.5187258   2.1807749   .24810344   .25996226 |
+  |  17         sa   -6.0289017   4.3039362   .16127752    .1746255 |
+  |  18         sa   -8.2740869   2.3924627    .0005434   .00213358 |
+  |  19         sa   -.33974991   2.5263706    .8930219    .8941918 |
+  +-----------------------------------------------------------------+
+
+. restore
+
+. 
+. *------------------------------------------------------------------------------
+. * 10. SAVE THE CONSTRUCTED PANEL (read by 02_compare_python.do)
+. *------------------------------------------------------------------------------
+. capture drop mm_*
+
+. save "$OUT/stata_panel.dta", replace
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/stata_panel.dta saved
+
+. 
+. di as result _newline "01_stata_independent.do finished. Outputs are in $OUT"
+
+01_stata_independent.do finished. Outputs are in /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out
+
+. di as result "Next: do 02_compare_python.do"
+Next: do 02_compare_python.do
+
+. log close
+      name:  <unnamed>
+       log:  /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/logs/01_stata_independent.log
+  log type:  text
+ closed on:   7 Nov 2026, 21:09:54
+----------------------------------------------------------------------------------------------------------------------------------------------------------------

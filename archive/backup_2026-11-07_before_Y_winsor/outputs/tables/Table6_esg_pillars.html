@@ -1,0 +1,153 @@
+<html><head><meta charset='utf-8'><style>body{font-family:Georgia,serif;margin:2em}table.t{border-collapse:collapse;border-top:2px solid #000;border-bottom:2px solid #000}table.t th,table.t td{padding:3px 10px;text-align:right}table.t thead tr{border-bottom:1px solid #000}table.t th:first-child,table.t td:first-child{text-align:left}.n{font-size:.85em;max-width:60em}</style></head><body><h2>Table 6: E / S / G Sub-scores (TWSE Food Firms, 2016-2025)</h2><h3>Table 6</h3><table class="dataframe t">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>(1) TESG</th>
+      <th>(2) E</th>
+      <th>(3) S</th>
+      <th>(4) G</th>
+    </tr>
+    <tr>
+      <th>Dependent variable (column header)</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>SA Index</th>
+      <td>2.4887</td>
+      <td>18.9913</td>
+      <td>-28.2452**</td>
+      <td>26.5164*</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(14.3161)</td>
+      <td>(39.6517)</td>
+      <td>(12.6740)</td>
+      <td>(15.0397)</td>
+    </tr>
+    <tr>
+      <th>ROA</th>
+      <td>1.2904</td>
+      <td>-8.2252</td>
+      <td>-3.8222</td>
+      <td>-12.9519</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(11.3008)</td>
+      <td>(22.1175)</td>
+      <td>(15.9557)</td>
+      <td>(24.9749)</td>
+    </tr>
+    <tr>
+      <th>LEV</th>
+      <td>-9.4019</td>
+      <td>6.6848</td>
+      <td>-14.4546***</td>
+      <td>-7.6833</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(6.1818)</td>
+      <td>(19.3583)</td>
+      <td>(4.3117)</td>
+      <td>(9.8615)</td>
+    </tr>
+    <tr>
+      <th>TQ</th>
+      <td>0.7932</td>
+      <td>1.3550</td>
+      <td>1.1978</td>
+      <td>2.9593</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(2.0100)</td>
+      <td>(2.6426)</td>
+      <td>(1.2763)</td>
+      <td>(3.8426)</td>
+    </tr>
+    <tr>
+      <th>GROWTH</th>
+      <td>-3.6871</td>
+      <td>0.8524</td>
+      <td>-3.9922</td>
+      <td>-0.7491</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(2.5157)</td>
+      <td>(4.6517)</td>
+      <td>(3.2650)</td>
+      <td>(3.6007)</td>
+    </tr>
+    <tr>
+      <th>CASH</th>
+      <td>7.3411</td>
+      <td>14.1857</td>
+      <td>1.8554</td>
+      <td>8.0084</td>
+    </tr>
+    <tr>
+      <th></th>
+      <td>(6.7258)</td>
+      <td>(20.5091)</td>
+      <td>(7.1679)</td>
+      <td>(19.8452)</td>
+    </tr>
+    <tr>
+      <th>Firm FE</th>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <th>Year FE</th>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <th>Observations</th>
+      <td>219</td>
+      <td>219</td>
+      <td>219</td>
+      <td>219</td>
+    </tr>
+    <tr>
+      <th>Firms (with &gt;= 2 obs.)</th>
+      <td>24 (22)</td>
+      <td>24 (22)</td>
+      <td>24 (22)</td>
+      <td>24 (22)</td>
+    </tr>
+    <tr>
+      <th>Within R²</th>
+      <td>0.057</td>
+      <td>0.031</td>
+      <td>0.112</td>
+      <td>0.068</td>
+    </tr>
+    <tr>
+      <th>FC variable: p-value, t(G-1)</th>
+      <td>0.864</td>
+      <td>0.637</td>
+      <td>0.037</td>
+      <td>0.092</td>
+    </tr>
+    <tr>
+      <th>FC variable: p-value, wild cluster bootstrap</th>
+      <td>0.880</td>
+      <td>0.685</td>
+      <td>0.084</td>
+      <td>0.112</td>
+    </tr>
+  </tbody>
+</table><p class='n'>Two-way fixed-effects (firm and year) panel regressions, same estimator and sample as Table 4 (N = 219 firm-years, 24 firms; 7780 and 7791 have one observation each and are absorbed by the firm effect).<br>Standard errors in parentheses are clustered by firm, CR1 (G/(G-1) x (N-1)/(N-K)). Stars use two-sided p-values from a t distribution with G-1 = 21 degrees of freedom, G = firms with at least two observations (Cameron and Miller 2015): *** p&lt;0.01, ** p&lt;0.05, * p&lt;0.1.<br>Wild cluster bootstrap p-value for the financial-constraint (FC) variable of each column: restricted (null imposed), Rademacher weights, B = 9999, seed = 20261106, on the equivalent least-squares-dummy-variable regression, clusters = firms.<br>Regressors are winsorized at the 1st/99th percentiles of the 219-row sample; SA is computed from winsorized Size and Age. Dependent variables are used as exported by TEJ (not winsorized, D18).<br>Brief §5.2: the main model re-estimated with the TEJ pillar scores as dependent variable: E = 環境構面分數, S = 社會構面分數, G = 公司治理構面分數 (0-100, December rating keyed on the sustainability-report year, as TESG). Column (1) repeats Table 4 column (1) for comparison. The pillar scores do not include the Event Radar adjustment that enters the TESG score (D4).<br>Source: TEJ; own calculations.</p></body></html>

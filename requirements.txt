@@ -1,0 +1,13 @@
+# Python environment for the RA test (brief allows R or Python; this project uses Python)
+# Install: python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+# Then record exact versions: pip freeze > requirements-lock.txt
+pandas
+numpy
+openpyxl
+scipy
+statsmodels
+linearmodels
+matplotlib
+seaborn
+wildboottest
+python-pptx

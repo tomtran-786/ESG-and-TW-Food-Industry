@@ -1,0 +1,1020 @@
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/logs/02_compare_python.log
+  log type:  text
+ opened on:   7 Nov 2026, 21:10:04
+
+. 
+. global TOL_VAR   1e-9
+
+. global TOL_COEF  1e-6
+
+. global TOL_SE    1e-5
+
+. global TOL_P     1e-5
+
+. global TOL_WILD  0.02
+
+. global TOL_R2    1e-6
+
+. global TOL_3DP   6e-4
+
+. global TOL_4DP   1.1e-4
+
+. 
+. foreach f in "$OUT/stata_panel.dta" "$OUT/stata_results_long.dta" "$ROOT/data_clean/analysis_panel.csv" "$ROOT/outputs/tables/table4_inference.csv" "$ROOT/out
+> puts/tables/table5_6_inference.csv" {
+  2.     capture confirm file "`f'"
+  3.     if _rc {
+  4.         di as error "Missing file: `f'"
+  5.         di as error "Run 01_stata_independent.do first, from the project root (or set global ROOT)."
+  6.         exit 601
+  7.     }
+  8. }
+
+. 
+. * helper: turn a block of (item, v_stata, v_py, tol) into verdicts and save it
+. capture program drop fin_block
+
+. program define fin_block
+  1.     args bname
+  2.     gen str12 block = "`bname'"
+  3.     gen double diff = abs(v_stata - v_py)
+  4.     gen str8 verdict = cond(missing(diff), "FAIL", cond(diff <= tol, "PASS", "FAIL"))
+  5.     keep block item v_stata v_py diff tol verdict
+  6.     save "$OUT/_blk_`bname'.dta", replace
+  7.     quietly count if verdict == "FAIL"
+  8.     di as text "Block `bname': " _N " checks, " r(N) " FAIL"
+  9. end
+
+. 
+. *==============================================================================
+. * A. VARIABLES, ROW BY ROW (219 rows)
+. *==============================================================================
+. use "$OUT/stata_panel.dta", clear
+
+. keep if my_sample == 1
+(31 observations deleted)
+
+. keep stock_code year tesg tesg_e tesg_s tesg_g tesg_w tesg_e_w tesg_s_w tesg_g_w size_usd size_usd_w age_yr age_w roa roa_w lev lev_w tq tq_w growth growth_w 
+> cash cash_w size_ln size_ln_w sa sa_lag
+
+. tempfile stx
+
+. save `stx'
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_10300.000001 saved
+
+. 
+. import delimited using "$ROOT/data_clean/analysis_panel.csv", clear varnames(1) stringcols(1) case(lower) encoding("utf-8")
+(40 vars, 219 obs)
+
+. local pyvars tesg e s g tesg_w e_w s_w g_w size size_w age age_w roa roa_w lev lev_w tq tq_w growth growth_w cash cash_w size_ln size_ln_w sa sa_lag
+
+. keep stock_code year `pyvars'
+
+. foreach v of local pyvars {
+  2.     rename `v' py_`v'
+  3. }
+
+. merge 1:1 stock_code year using `stx', gen(_mA)
+(note: variable year was int, now double to accommodate using data's values)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                               219  (_mA==3)
+    -----------------------------------------
+
+. quietly count if _mA == 2
+
+. local nst = r(N)
+
+. quietly count if _mA == 1
+
+. local npy = r(N)
+
+. 
+. postfile pbA str90 item double(v_stata v_py tol) using "$OUT/_raw_A.dta", replace
+(note: file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_raw_A.dta not found)
+
+. post pbA ("rows only in Stata sample (expected 0)") (`nst') (0) (0)
+
+. post pbA ("rows only in Python sample (expected 0)") (`npy') (0) (0)
+
+. 
+. local pairs "tesg:tesg e:tesg_e s:tesg_s g:tesg_g tesg_w:tesg_w e_w:tesg_e_w s_w:tesg_s_w g_w:tesg_g_w size:size_usd size_w:size_usd_w age:age_yr age_w:age_w 
+> roa:roa roa_w:roa_w lev:lev lev_w:lev_w tq:tq tq_w:tq_w growth:growth growth_w:growth_w cash:cash cash_w:cash_w size_ln:size_ln size_ln_w:size_ln_w sa:sa sa_l
+> ag:sa_lag"
+
+. foreach p of local pairs {
+  2.     local pv = substr("`p'", 1, strpos("`p'", ":") - 1)
+  3.     local sv = substr("`p'", strpos("`p'", ":") + 1, .)
+  4.     quietly gen double _d = cond(missing(py_`pv') & missing(`sv'), 0, cond(missing(py_`pv') | missing(`sv'), 1e9, abs(py_`pv' - `sv'))) if _mA == 3
+  5.     quietly summarize _d
+  6.     post pbA ("`sv' (Stata) vs `pv' (Python): max abs diff") (r(max)) (0) ($TOL_VAR)
+  7.     drop _d
+  8. }
+
+. postclose pbA
+
+. use "$OUT/_raw_A.dta", clear
+
+. fin_block A
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_blk_A.dta saved
+Block A: 28 checks, 0 FAIL
+
+. 
+. *==============================================================================
+. * B. WINSORIZATION CUTOFFS (1st / 99th percentile, 219-row sample)
+. *==============================================================================
+. use "$OUT/stata_cutoffs.dta", clear
+
+. drop if target == "growth_w197"
+(1 observation deleted)
+
+. gen str16 pyname = source
+
+. replace pyname = "size" if source == "size_usd"
+(1 real change made)
+
+. replace pyname = "age"  if source == "age_yr"
+(1 real change made)
+
+. replace pyname = "e"    if source == "tesg_e"
+(1 real change made)
+
+. replace pyname = "s"    if source == "tesg_s"
+(1 real change made)
+
+. replace pyname = "g"    if source == "tesg_g"
+(1 real change made)
+
+. tempfile cutst
+
+. save `cutst'
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_10300.000002 saved
+
+. import delimited using "$ROOT/data_clean/winsor_cutoffs.csv", clear varnames(1) case(lower)
+(12 vars, 12 obs)
+
+. keep variable p01 p99 n_sample
+
+. rename (variable p01 p99 n_sample) (pyname py_p01 py_p99 py_n)
+
+. merge 1:1 pyname using `cutst', keep(match) nogen
+(note: variable pyname was str7, now str16 to accommodate using data's values)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                                12  
+    -----------------------------------------
+
+. postfile pbB str90 item double(v_stata v_py tol) using "$OUT/_raw_B.dta", replace
+(note: file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_raw_B.dta not found)
+
+. forvalues i = 1/`=_N' {
+  2.     local t = target[`i']
+  3.     post pbB ("p01 of `t'")      (p01[`i'])      (py_p01[`i']) ($TOL_VAR)
+  4.     post pbB ("p99 of `t'")      (p99[`i'])      (py_p99[`i']) ($TOL_VAR)
+  5.     post pbB ("n in sample, `t'") (n_sample[`i']) (py_n[`i'])   (0)
+  6. }
+
+. postclose pbB
+
+. use "$OUT/_raw_B.dta", clear
+
+. fin_block B
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_blk_B.dta saved
+Block B: 36 checks, 0 FAIL
+
+. 
+. *==============================================================================
+. * C. TABLE 1: FIRM-YEARS BY YEAR
+. *==============================================================================
+. import delimited using "$ROOT/data_clean/analysis_panel.csv", clear varnames(1) stringcols(1) case(lower) encoding("utf-8")
+(40 vars, 219 obs)
+
+. gen byte pin  = (in_sample == "True")
+
+. gen byte plit = (brief_literal == "True")
+
+. collapse (sum) py_firm_years = pin py_lit = plit, by(year)
+
+. merge 1:1 year using "$OUT/stata_table1_sample_by_year.dta", nogen
+(note: variable year was int, now double to accommodate using data's values)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                                10  
+    -----------------------------------------
+
+. postfile pbC str90 item double(v_stata v_py tol) using "$OUT/_raw_C.dta", replace
+(note: file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_raw_C.dta not found)
+
+. forvalues i = 1/`=_N' {
+  2.     local y = year[`i']
+  3.     post pbC ("firm-years, `y'")               (firm_years[`i']) (py_firm_years[`i']) (0)
+  4.     post pbC ("firm-years brief-literal, `y'") (lit_years[`i'])  (py_lit[`i'])        (0)
+  5. }
+
+. postclose pbC
+
+. use "$OUT/_raw_C.dta", clear
+
+. fin_block C
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_blk_C.dta saved
+Block C: 20 checks, 0 FAIL
+
+. 
+. *==============================================================================
+. * D. TABLE 2: DESCRIPTIVE STATISTICS (Python table is rounded to 3 decimals)
+. *==============================================================================
+. import excel using "$ROOT/outputs/tables/Table2_descriptive.xlsx", cellrange(A2:G8) clear
+
+. rename (A B C D E F G) (pylabel py_N py_mean py_sd py_min py_p50 py_max)
+
+. gen row = _n
+
+. tempfile t2py
+
+. save `t2py'
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_10300.000003 saved
+
+. use "$OUT/stata_table2_descriptive.dta", clear
+
+. gen row = _n
+
+. merge 1:1 row using `t2py', nogen
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                                 7  
+    -----------------------------------------
+
+. postfile pbD str90 item double(v_stata v_py tol) using "$OUT/_raw_D.dta", replace
+(note: file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_raw_D.dta not found)
+
+. forvalues i = 1/`=_N' {
+  2.     local v = variable[`i']
+  3.     post pbD ("`v': N")      (N[`i'])    (py_N[`i'])    (0)
+  4.     post pbD ("`v': mean")   (mean[`i']) (py_mean[`i']) ($TOL_3DP)
+  5.     post pbD ("`v': sd")     (sd[`i'])   (py_sd[`i'])   ($TOL_3DP)
+  6.     post pbD ("`v': min")    (vmin[`i']) (py_min[`i'])  ($TOL_3DP)
+  7.     post pbD ("`v': median") (p50[`i'])  (py_p50[`i'])  ($TOL_3DP)
+  8.     post pbD ("`v': max")    (vmax[`i']) (py_max[`i'])  ($TOL_3DP)
+  9. }
+
+. postclose pbD
+
+. use "$OUT/_raw_D.dta", clear
+
+. fin_block D
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_blk_D.dta saved
+Block D: 42 checks, 0 FAIL
+
+. 
+. *==============================================================================
+. * E. TABLE 3: POOLED VIF (Python table is rounded to 3 decimals)
+. *==============================================================================
+. import excel using "$ROOT/outputs/tables/Table3_correlation_vif.xlsx", sheet("VIF") cellrange(A2:C8) clear
+
+. rename (A B C) (pylabel py_vif1 py_vif2)
+
+. gen row = _n
+
+. tempfile vpy
+
+. save `vpy'
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_10300.000004 saved
+
+. use "$OUT/stata_vif.dta", clear
+
+. gen row = _n
+
+. merge 1:1 row using `vpy', nogen
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                                 7  
+    -----------------------------------------
+
+. postfile pbE str90 item double(v_stata v_py tol) using "$OUT/_raw_E.dta", replace
+(note: file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_raw_E.dta not found)
+
+. forvalues i = 1/`=_N' {
+  2.     local v = variable[`i']
+  3.     if !missing(py_vif1[`i']) | !missing(vif_m1[`i']) {
+  4.         post pbE ("VIF Model 1: `v'") (vif_m1[`i']) (py_vif1[`i']) ($TOL_3DP)
+  5.     }
+  6.     post pbE ("VIF Model 2: `v'") (vif_m2[`i']) (py_vif2[`i']) ($TOL_3DP)
+  7. }
+
+. postclose pbE
+
+. use "$OUT/_raw_E.dta", clear
+
+. fin_block E
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_blk_E.dta saved
+Block E: 13 checks, 0 FAIL
+
+. 
+. *==============================================================================
+. * F. REGRESSIONS (Tables 4, 5, 6)
+. *==============================================================================
+. * F1. Python results, one row per (model key, variable)
+. import delimited using "$ROOT/outputs/tables/table4_inference.csv", clear varnames(1) stringcols(1 2) case(lower)
+(14 vars, 24 obs)
+
+. keep if estimator == "FE"
+(12 observations deleted)
+
+. gen pykey = .
+(12 missing values generated)
+
+. replace pykey = 1 if strpos(column, "(1)") > 0
+(6 real changes made)
+
+. replace pykey = 2 if strpos(column, "(2)") > 0
+(6 real changes made)
+
+. rename variable pyvar
+
+. keep pykey pyvar beta se_cr1 se_default p_t_n_k df_n_k p_t_g1 g p_wild
+
+. rename (beta se_cr1 se_default p_t_n_k df_n_k p_t_g1 g p_wild) (py_beta py_se_cr1 py_se_default py_p_nk py_df py_p_g1 py_g py_pwild)
+
+. tempfile py4
+
+. save `py4'
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_10300.000005 saved
+
+. 
+. import delimited using "$ROOT/outputs/tables/table5_6_inference.csv", clear varnames(1) stringcols(1 2 3) case(lower)
+(14 vars, 98 obs)
+
+. keep if estimator == "FE"
+(49 observations deleted)
+
+. gen pykey = .
+(49 missing values generated)
+
+. replace pykey = 1 if strpos(model, "Model 1") > 0
+(6 real changes made)
+
+. replace pykey = 4 if strpos(model, "5.1") > 0
+(6 real changes made)
+
+. replace pykey = 5 if strpos(model, "5.3") > 0
+(6 real changes made)
+
+. replace pykey = 6 if strpos(model, "5.4") > 0
+(7 real changes made)
+
+. replace pykey = 7 if strpos(model, "Table 6 (2)") > 0
+(6 real changes made)
+
+. replace pykey = 8 if strpos(model, "Table 6 (3)") > 0
+(6 real changes made)
+
+. replace pykey = 9 if strpos(model, "Table 6 (4)") > 0
+(6 real changes made)
+
+. drop if missing(pykey) | pykey == 1
+(12 observations deleted)
+
+. rename variable pyvar
+
+. keep pykey pyvar beta se_cr1 se_default p_t_n_k df_n_k p_t_g1 g p_wild
+
+. rename (beta se_cr1 se_default p_t_n_k df_n_k p_t_g1 g p_wild) (py_beta py_se_cr1 py_se_default py_p_nk py_df py_p_g1 py_g py_pwild)
+
+. append using `py4'
+
+. tempfile pyall
+
+. save `pyall'
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_10300.000006 saved
+
+. 
+. * F2. Python within R2 (full precision, brief definition of SA), keyed to Stata model ids
+. import delimited using "$ROOT/outputs/tables/robust_hp_sa.csv", clear varnames(1) stringcols(1 2) case(lower)
+(9 vars, 32 obs)
+
+. keep if definition == "BRIEF" & strpos(model, "Two-way FE") > 0
+(27 observations deleted)
+
+. gen mid = .
+(5 missing values generated)
+
+. replace mid = 1 if model == "Two-way FE: TESG"
+(1 real change made)
+
+. replace mid = 5 if strpos(model, "lagged") > 0
+(1 real change made)
+
+. replace mid = 7 if model == "Two-way FE: E"
+(1 real change made)
+
+. replace mid = 8 if model == "Two-way FE: S"
+(1 real change made)
+
+. replace mid = 9 if model == "Two-way FE: G"
+(1 real change made)
+
+. drop if missing(mid)
+(0 observations deleted)
+
+. keep mid within_r2
+
+. rename within_r2 py_r2w
+
+. tempfile r2f
+
+. save `r2f'
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_10300.000007 saved
+
+. 
+. * F3. Stata results merged with Python results
+. use "$OUT/stata_results_long.dta", clear
+
+. gen pykey = cond(mid == 3, 2, mid)
+
+. gen str16 pyvar = cond(variable == "growth_w197", "growth_w", variable)
+
+. merge m:1 pykey pyvar using `pyall', keep(master match) gen(_mF)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                                55  (_mF==3)
+    -----------------------------------------
+
+. quietly count if _mF == 1
+
+. di as text "Stata coefficient rows without a Python counterpart: " r(N) "  (expected 0)"
+Stata coefficient rows without a Python counterpart: 0  (expected 0)
+
+. merge m:1 mid using `r2f', keep(master match) nogen
+(note: variable mid was int, now double to accommodate using data's values)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                            25
+        from master                        25  
+        from using                          0  
+
+    matched                                30  
+    -----------------------------------------
+
+. sort mid
+
+. by mid: gen byte first = (_n == 1)
+
+. 
+. * F4. Identify the small-sample convention of the Python clustered SE.
+. *     se_cr0 is the plain cluster sandwich computed in Mata (no small-sample factor).
+. *     Candidates = (cluster factor) x (observations factor). Nothing here is tuned: all 15
+. *     candidates are listed and the one that reproduces the Python SE for the SA coefficient of the main model
+. *     coefficient is then used for every other coefficient.
+. gen double Ks   = k
+
+. gen double Kyr  = k + (Ny - 1)
+
+. gen double Kall = k + (Ny - 1) + G24
+
+. forvalues gi = 0/2 {
+  2.     forvalues ni = 0/4 {
+  3.         quietly gen double fg = 1
+  4.         if `gi' == 1 quietly replace fg = G22 / (G22 - 1)
+  5.         if `gi' == 2 quietly replace fg = G24 / (G24 - 1)
+  6.         quietly gen double fn = 1
+  7.         if `ni' == 1 quietly replace fn = (N - 1) / (N - Ks)
+  8.         if `ni' == 2 quietly replace fn = (N - 1) / (N - Kyr)
+  9.         if `ni' == 3 quietly replace fn = (N - 1) / (N - Kall)
+ 10.         if `ni' == 4 quietly replace fn = N / (N - Kall)
+ 11.         quietly gen double cs_`gi'_`ni' = se_cr0 * sqrt(fg * fn)
+ 12.         quietly gen double er_`gi'_`ni' = abs(cs_`gi'_`ni' / py_se_cr1 - 1)
+ 13.         drop fg fn
+ 14.     }
+ 15. }
+
+. di as text _newline "Small-sample convention of the Python clustered SE (relative error vs Python, main model SA | rows within 1e-5)"
+
+Small-sample convention of the Python clustered SE (relative error vs Python, main model SA | rows within 1e-5)
+
+. di as text "  gi: 0 none, 1 G22/(G22-1), 2 G24/(G24-1)     ni: 0 none, 1 (N-1)/(N-k), 2 (N-1)/(N-k-years+1), 3 (N-1)/(N-K_all), 4 N/(N-K_all)"
+  gi: 0 none, 1 G22/(G22-1), 2 G24/(G24-1)     ni: 0 none, 1 (N-1)/(N-k), 2 (N-1)/(N-k-years+1), 3 (N-1)/(N-K_all), 4 N/(N-K_all)
+
+. local best = 1e9
+
+. local bg = -1
+
+. local bn = -1
+
+. forvalues gi = 0/2 {
+  2.     forvalues ni = 0/4 {
+  3.         quietly summarize er_`gi'_`ni' if mid == 1 & pyvar == "sa"
+  4.         local e1 = r(mean)
+  5.         quietly count if er_`gi'_`ni' < 1e-5
+  6.         di as text "  gi=`gi' ni=`ni'   rel.err = " %12.2e `e1' "   rows matching = " r(N)
+  7.         if `e1' < `best' {
+  8.             local best = `e1'
+  9.             local bg = `gi'
+ 10.             local bn = `ni'
+ 11.         }
+ 12.     }
+ 13. }
+  gi=0 ni=0   rel.err =     1.10e-01   rows matching = 0
+  gi=0 ni=1   rel.err =     1.00e-01   rows matching = 0
+  gi=0 ni=2   rel.err =     8.04e-02   rows matching = 0
+  gi=0 ni=3   rel.err =     2.11e-02   rows matching = 0
+  gi=0 ni=4   rel.err =     1.88e-02   rows matching = 0
+  gi=1 ni=0   rel.err =     8.95e-02   rows matching = 0
+  gi=1 ni=1   rel.err =     7.89e-02   rows matching = 0
+  gi=1 ni=2   rel.err =     5.88e-02   rows matching = 0
+  gi=1 ni=3   rel.err =     1.98e-03   rows matching = 0
+  gi=1 ni=4   rel.err =     4.28e-03   rows matching = 0
+  gi=2 ni=0   rel.err =     9.13e-02   rows matching = 0
+  gi=2 ni=1   rel.err =     8.07e-02   rows matching = 0
+  gi=2 ni=2   rel.err =     6.07e-02   rows matching = 0
+  gi=2 ni=3   rel.err =     4.55e-15   rows matching = 49
+  gi=2 ni=4   rel.err =     2.29e-03   rows matching = 0
+
+. gen double se_conv = .
+(55 missing values generated)
+
+. if `best' < 1e-5 {
+.     quietly replace se_conv = cs_`bg'_`bn'
+.     di as result "Convention identified: gi=`bg', ni=`bn' (relative error " %9.2e `best' ")."
+Convention identified: gi=2, ni=3 (relative error  4.55e-15).
+.     local convfound = 1
+. }
+
+. else {
+.     quietly replace se_conv = se_clust
+.     di as error "No candidate reproduces the Python clustered SE (best rel. error " %9.2e `best' "). Falling back to the Stata LSDV clustered SE."
+.     di as error "SE and p-value checks below then test the sandwich only up to the unexplained factor; read implied factors next."
+.     local convfound = 0
+. }
+
+. quietly gen double implied_cr1 = (py_se_cr1 / se_cr0)^2
+
+. quietly summarize implied_cr1 if mid == 1 & pyvar == "sa"
+
+. di as text "Implied factor (py_se_cr1 / Stata CR0)^2, main SA:      " %9.5f r(mean)
+Implied factor (py_se_cr1 / Stata CR0)^2, main SA:        1.26377
+
+. quietly gen double implied_default = (py_se_default / se_cr0)^2
+
+. quietly summarize implied_default if mid == 1 & pyvar == "sa"
+
+. di as text "Implied factor (py_se_default / Stata CR0)^2, main SA:  " %9.5f r(mean)
+Implied factor (py_se_default / Stata CR0)^2, main SA:    1.21667
+
+. quietly count if abs(se_clust / py_se_cr1 - 1) < 1e-5
+
+. di as text "Rows where the Stata LSDV clustered SE equals the Python SE within 1e-5: " r(N) " of " _N
+Rows where the Stata LSDV clustered SE equals the Python SE within 1e-5: 49 of 55
+
+. 
+. * F5. Row-level checks
+. postfile pbF str90 item double(v_stata v_py tol) using "$OUT/_raw_F.dta", replace
+(note: file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_raw_F.dta not found)
+
+. forvalues i = 1/`=_N' {
+  2.     local nm = "m" + string(mid[`i']) + " " + variable[`i']
+  3.     post pbF ("beta | `nm'")           (beta[`i'])      (py_beta[`i'])      ($TOL_COEF * max(1, abs(py_beta[`i'])))
+  4.     post pbF ("se clustered | `nm'")   (se_conv[`i'])   (py_se_cr1[`i'])    ($TOL_SE * py_se_cr1[`i'])
+  5.     post pbF ("p t(G-1) | `nm'")       (2 * ttail(G22[`i'] - 1, abs(beta[`i'] / se_conv[`i'])))    (py_p_g1[`i']) ($TOL_P)
+  6.     post pbF ("p t(N-K) | `nm'")       (2 * ttail(df_unadj[`i'], abs(beta[`i'] / se_conv[`i'])))   (py_p_nk[`i'])  ($TOL_P)
+  7.     post pbF ("df N-K | `nm'")         (df_unadj[`i'])  (py_df[`i'])        (0)
+  8.     post pbF ("G (clusters >= 2 obs) | `nm'") (G22[`i']) (py_g[`i'])        (0)
+  9.     if !missing(pwild[`i']) & !missing(py_pwild[`i']) {
+ 10.         post pbF ("p wild bootstrap | `nm'") (pwild[`i']) (py_pwild[`i'])   ($TOL_WILD)
+ 11.     }
+ 12.     if first[`i'] == 1 {
+ 13.         local nexp = cond(inlist(mid[`i'], 2, 3), 197, 219)
+ 14.         post pbF ("N | m" + string(mid[`i'])) (N[`i']) (`nexp') (0)
+ 15.         if !missing(py_r2w[`i']) {
+ 16.             post pbF ("within R2 | m" + string(mid[`i'])) (r2w[`i']) (py_r2w[`i']) ($TOL_R2)
+ 17.         }
+ 18.     }
+ 19. }
+
+. postclose pbF
+
+. 
+. * F6. Side-by-side on the financial-constraint variable (does the conclusion survive?)
+. preserve
+
+. keep if inlist(variable, "sa", "fc_dummy", "sa_lag") | (mid == 3 & variable == "sa")
+(46 observations deleted)
+
+. gen double p_stata = 2 * ttail(G22 - 1, abs(beta / se_conv))
+
+. gen byte same_5pct = ((p_stata < 0.05) == (py_p_g1 < 0.05))
+
+. di as text _newline "Financial-constraint variable, Stata vs Python"
+
+Financial-constraint variable, Stata vs Python
+
+. list mid variable beta py_beta p_stata py_p_g1 pwild py_pwild same_5pct, noobs sep(0) abbreviate(12)
+
+  +------------------------------------------------------------------------------------------------------+
+  | mid   variable         beta      py_beta     p_stata     py_p_g1       pwild    py_pwild   same_5pct |
+  |------------------------------------------------------------------------------------------------------|
+  |   1         sa    2.2445533    2.2445533   .87443955   .87443955   .88848885   .88728873           1 |
+  |   2         sa    .45529502    .40731791    .9754555   .97807108   .97529753   .97919792           1 |
+  |   3         sa    .40731791    .40731791   .97807108   .97807108   .97819782   .97919792           1 |
+  |   4   fc_dummy   -3.1017428   -3.1017428   .36657182   .36657182   .49774977   .49214921           1 |
+  |   5     sa_lag    10.503685    10.503685   .37745222   .37745222   .43134313   .43734373           1 |
+  |   6         sa     4.842191     4.842191   .82722389   .82722389   .84438444   .84688469           1 |
+  |   7         sa    18.868653    18.868653   .63922342   .63922342   .69036904    .6869687           1 |
+  |   8         sa   -29.046943   -29.046943   .02591562   .02591562     .070007   .06860686           1 |
+  |   9         sa    25.842604    25.842604   .10223954   .10223954    .1260126   .12711271           1 |
+  +------------------------------------------------------------------------------------------------------+
+
+. restore
+
+. 
+. use "$OUT/_raw_F.dta", clear
+
+. fin_block F
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_blk_F.dta saved
+Block F: 368 checks, 24 FAIL
+
+. 
+. *==============================================================================
+. * G. HAUSMAN AND MUNDLAK
+. *   Coefficients are rounded to 4 decimals in the Python Excel table.
+. *   RE uses a different variance-component estimator in different software, so a small
+. *   RE gap is a software difference, not an error: it is reported, not hidden.
+. *==============================================================================
+. import excel using "$ROOT/outputs/tables/Table4_hausman.xlsx", sheet("Coefficients") cellrange(A2:F7) clear
+
+. rename (A B C D E F) (pylabel py_b_fe py_b_re py_diff py_se_fe py_se_re)
+
+. gen row = _n
+
+. tempfile hpy
+
+. save `hpy'
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_10300.000009 saved
+
+. import excel using "$ROOT/outputs/tables/Table4_hausman.xlsx", sheet("Tests") cellrange(A2:D3) clear
+
+. rename (A B C D) (pylabel py_stat py_df py_p)
+
+. gen row = _n
+
+. tempfile tpy
+
+. save `tpy'
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_10300.00000a saved
+
+. 
+. use "$OUT/stata_hausman_coef.dta", clear
+
+. gen row = _n
+
+. merge 1:1 row using `hpy', nogen
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                                 6  
+    -----------------------------------------
+
+. postfile pbG str90 item double(v_stata v_py tol) using "$OUT/_raw_G.dta", replace
+(note: file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_raw_G.dta not found)
+
+. forvalues i = 1/`=_N' {
+  2.     local v = variable[`i']
+  3.     post pbG ("Hausman FE coefficient | `v'") (b_fe[`i'])  (py_b_fe[`i'])  ($TOL_4DP)
+  4.     post pbG ("Hausman RE coefficient | `v'") (b_re[`i'])  (py_b_re[`i'])  ($TOL_4DP)
+  5.     post pbG ("Hausman difference | `v'")     (diff[`i'])  (py_diff[`i'])  ($TOL_4DP)
+  6.     post pbG ("Hausman SE FE | `v'")          (se_fe[`i']) (py_se_fe[`i']) ($TOL_4DP)
+  7.     post pbG ("Hausman SE RE | `v'")          (se_re[`i']) (py_se_re[`i']) ($TOL_4DP)
+  8. }
+
+. use "$OUT/stata_hausman_tests.dta", clear
+
+. gen row = _n
+
+. merge 1:1 row using `tpy', nogen
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                                 2  
+    -----------------------------------------
+
+. * Hausman statistic and p: 4 decimals but sensitive to the RE estimator, so tolerance 0.01 / 0.002.
+. * Mundlak: firm-clustered Wald with G/(G-1) x (N-1)/(N-K) in both programs (checked 2026-11-07: 3.369739 in both on unwinsorized
+. * TESG), so only the 4-decimal rounding of the Python table is allowed.
+. post pbG ("Hausman statistic H")      (stat[1]) (py_stat[1]) (0.01)
+
+. post pbG ("Hausman p-value")          (p[1])    (py_p[1])    (0.002)
+
+. post pbG ("Hausman df")               (df[1])   (py_df[1])   (0)
+
+. post pbG ("Mundlak chi2 (clustered)") (stat[2]) (py_stat[2]) ($TOL_4DP)
+
+. post pbG ("Mundlak p-value")          (p[2])    (py_p[2])    ($TOL_4DP)
+
+. postclose pbG
+
+. use "$OUT/_raw_G.dta", clear
+
+. fin_block G
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_blk_G.dta saved
+Block G: 35 checks, 0 FAIL
+
+. 
+. *==============================================================================
+. * H. RANDOM EFFECTS (Tables 4-6, RE columns)
+. *   Stata: xtreg, re vce(cluster firm) (01, do_re, ids 11-19). Python: linearmodels RandomEffects,
+. *   se_cr1 = clustered with G/(G-1) x (N-1)/(N-K) (debiased=True default + group_debias=True), se_default = clustered with N/(N-K) only,
+. *   p_t_g1 from t(G-1) with G = 24 (all firms), p_normal from N(0,1), df_n_k = N - K.
+. *   Both programs use the Swamy-Arora variance components (the Hausman RE coefficients agreed to 1e-5 on
+. *   2026-11-07), so coefficients get the same tolerance as FE.
+. *==============================================================================
+. capture confirm file "$OUT/stata_results_re.dta"
+
+. if _rc {
+.     di as error "Missing $OUT/stata_results_re.dta: run the updated 01_stata_independent.do first."
+.     exit 601
+. }
+
+. import delimited using "$ROOT/outputs/tables/table4_inference.csv", clear varnames(1) stringcols(1 2) case(lower)
+(14 vars, 24 obs)
+
+. keep if estimator == "RE"
+(12 observations deleted)
+
+. gen mid = .
+(12 missing values generated)
+
+. replace mid = 11 if strpos(column, "(1)") > 0
+(6 real changes made)
+
+. replace mid = 13 if strpos(column, "(2)") > 0
+(6 real changes made)
+
+. rename variable pyvar
+
+. keep mid pyvar beta se_cr1 se_default p_t_n_k df_n_k p_t_g1 g p_normal
+
+. tempfile re4
+
+. save `re4'
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_10300.00000b saved
+
+. import delimited using "$ROOT/outputs/tables/table5_6_inference.csv", clear varnames(1) stringcols(1 2 3) case(lower)
+(14 vars, 98 obs)
+
+. keep if estimator == "RE"
+(49 observations deleted)
+
+. gen mid = .
+(49 missing values generated)
+
+. replace mid = 14 if strpos(model, "5.1") > 0
+(6 real changes made)
+
+. replace mid = 15 if strpos(model, "5.3") > 0
+(6 real changes made)
+
+. replace mid = 16 if strpos(model, "5.4") > 0
+(7 real changes made)
+
+. replace mid = 17 if strpos(model, "Table 6 (2)") > 0
+(6 real changes made)
+
+. replace mid = 18 if strpos(model, "Table 6 (3)") > 0
+(6 real changes made)
+
+. replace mid = 19 if strpos(model, "Table 6 (4)") > 0
+(6 real changes made)
+
+. drop if missing(mid)          // "Model 1 (main)" and "Table 6 (1)" repeat the main RE column (id 11)
+(12 observations deleted)
+
+. rename variable pyvar
+
+. keep mid pyvar beta se_cr1 se_default p_t_n_k df_n_k p_t_g1 g p_normal
+
+. append using `re4'
+
+. rename (beta se_cr1 se_default p_t_n_k df_n_k p_t_g1 g p_normal) (py_beta py_se_cr1 py_se_default py_p_nk py_df py_p_g1 py_g py_p_normal)
+
+. isid mid pyvar
+
+. tempfile pyre
+
+. save `pyre'
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_10300.00000c saved
+
+. 
+. use "$OUT/stata_results_re.dta", clear
+
+. gen str16 pyvar = cond(variable == "growth_w197", "growth_w", variable)
+
+. merge 1:1 mid pyvar using `pyre', gen(_mH)
+(note: variable mid was int, now double to accommodate using data's values)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                                49  (_mH==3)
+    -----------------------------------------
+
+. quietly count if _mH != 3
+
+. local nunm = r(N)
+
+. di as text "RE rows found in only one program: `nunm'  (expected 0)"
+RE rows found in only one program: 0  (expected 0)
+
+. sort mid
+
+. by mid: gen byte first = (_n == 1)
+
+. 
+. postfile pbH str90 item double(v_stata v_py tol) using "$OUT/_raw_H.dta", replace
+(note: file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_raw_H.dta not found)
+
+. post pbH ("RE rows found in only one program (expected 0)") (`nunm') (0) (0)
+
+. forvalues i = 1/`=_N' {
+  2.     if _mH[`i'] == 3 {
+  3.         local nm = "m" + string(mid[`i']) + " " + variable[`i']
+  4.         post pbH ("RE beta | `nm'")                    (beta[`i'])     (py_beta[`i'])     ($TOL_COEF * max(1, abs(py_beta[`i'])))
+  5.         post pbH ("RE se clustered, CR1 | `nm'")       (se_clust[`i']) (py_se_cr1[`i'])   ($TOL_SE * py_se_cr1[`i'])
+  6.         post pbH ("RE se clustered, N/(N-K) only | `nm'") (se_clust[`i'] * sqrt((G[`i'] - 1) / G[`i'] * N[`i'] / (N[`i'] - 1))) (py_se_default[`i']) ($TOL_
+> SE * py_se_default[`i'])
+  7.         post pbH ("RE p t(G-1) | `nm'")                (p_tG1[`i'])    (py_p_g1[`i'])     ($TOL_P)
+  8.         post pbH ("RE p normal (z) | `nm'")            (p_z[`i'])      (py_p_normal[`i']) ($TOL_P)
+  9.         post pbH ("RE p t(N-K) | `nm'")                (p_tNK[`i'])    (py_p_nk[`i'])     ($TOL_P)
+ 10.         post pbH ("RE df N-K | `nm'")                  (df_nk[`i'])    (py_df[`i'])       (0)
+ 11.         post pbH ("RE G (all firms) | `nm'")           (G[`i'])        (py_g[`i'])        (0)
+ 12.         if first[`i'] == 1 {
+ 13.             local nexp = cond(mid[`i'] == 13, 197, 219)
+ 14.             post pbH ("RE N | m" + string(mid[`i'])) (N[`i']) (`nexp') (0)
+ 15.         }
+ 16.     }
+ 17. }
+
+. postclose pbH
+
+. 
+. preserve
+
+. keep if inlist(variable, "sa", "fc_dummy", "sa_lag") & _mH == 3
+(41 observations deleted)
+
+. gen byte same_5pct_tG1 = ((p_tG1 < 0.05) == (py_p_g1 < 0.05))
+
+. di as text _newline "RE, financial-constraint variable, Stata vs Python (p t(G-1) with G = 24; Stata prints p_z)"
+
+RE, financial-constraint variable, Stata vs Python (p t(G-1) with G = 24; Stata prints p_z)
+
+. list mid variable beta py_beta se_clust py_se_cr1 p_z p_tG1 py_p_g1 same_5pct_tG1, noobs sep(0) abbreviate(12)
+
+  +---------------------------------------------------------------------------------------------------------------------+
+  | mid   variable         beta      py_beta    se_clust   py_se_cr1         p_z       p_tG1     py_p_g1   same_5pct_~1 |
+  |---------------------------------------------------------------------------------------------------------------------|
+  |  11         sa   -4.8047936   -4.8047936   2.3199584   2.3199584   .03835236   .04975496   .04975496              1 |
+  |  13         sa   -5.2530847   -5.2530847   2.2705057   2.2705057   .02068864   .02997513   .02997513              1 |
+  |  14   fc_dummy   -4.0162941   -4.0162941   2.9038405   2.9038405   .16663501    .1799156    .1799156              1 |
+  |  15     sa_lag   -3.7453726   -3.7453726   1.8545096   1.8545096   .04342461   .05522459   .05522459              1 |
+  |  16         sa   -2.5187258   -2.5187258   2.1807749   2.1807749   .24810344   .25996226   .25996226              1 |
+  |  17         sa   -6.0289017   -6.0289017   4.3039362   4.3039362   .16127752    .1746255    .1746255              1 |
+  |  18         sa   -8.2740869   -8.2740869   2.3924627   2.3924627    .0005434   .00213358   .00213358              1 |
+  |  19         sa   -.33974991   -.33974991   2.5263706   2.5263706    .8930219    .8941918    .8941918              1 |
+  +---------------------------------------------------------------------------------------------------------------------+
+
+. restore
+
+. 
+. use "$OUT/_raw_H.dta", clear
+
+. fin_block H
+(note: file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_blk_H.dta not found)
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/_blk_H.dta saved
+Block H: 401 checks, 0 FAIL
+
+. 
+. *==============================================================================
+. * SUMMARY
+. *==============================================================================
+. use "$OUT/_blk_A.dta", clear
+
+. foreach b in B C D E F G H {
+  2.     append using "$OUT/_blk_`b'.dta"
+  3. }
+
+. di as text _newline "=============== CROSS-CHECK SUMMARY ==============="
+
+=============== CROSS-CHECK SUMMARY ===============
+
+. tab block verdict
+
+             |        verdict
+       block |      FAIL       PASS |     Total
+-------------+----------------------+----------
+           A |         0         28 |        28 
+           B |         0         36 |        36 
+           C |         0         20 |        20 
+           D |         0         42 |        42 
+           E |         0         13 |        13 
+           F |        24        344 |       368 
+           G |         0         35 |        35 
+           H |         0        401 |       401 
+-------------+----------------------+----------
+       Total |        24        919 |       943 
+
+
+. quietly count if verdict == "FAIL"
+
+. local nfail = r(N)
+
+. export delimited using "$OUT/crosscheck_report.csv", replace
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/crosscheck_report.csv saved
+
+. if `nfail' > 0 {
+.     di as error _newline "`nfail' check(s) FAILED. Listing them (full report: $OUT/crosscheck_report.csv):"
+
+24 check(s) FAILED. Listing them (full report: /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/crosscheck_report.csv):
+.     list block item v_stata v_py diff tol if verdict == "FAIL", noobs sep(0)
+
+  +--------------------------------------------------------------------------------------+
+  | block                         item      v_stata         v_py        diff         tol |
+  |--------------------------------------------------------------------------------------|
+  |     F             beta | m2 cash_w    4.5516487     4.556017   .00436827   4.556e-06 |
+  |     F     se clustered | m2 cash_w    5.8338064    5.8331422   .00066424   .00005833 |
+  |     F         p t(G-1) | m2 cash_w    .44396761    .44348543   .00048218      .00001 |
+  |     F         p t(N-K) | m2 cash_w     .4364217    .43593029   .00049141      .00001 |
+  |     F                 beta | m2 sa    .45529502    .40731791    .0479771   1.000e-06 |
+  |     F         se clustered | m2 sa    14.623021    14.642982   .01996154   .00014643 |
+  |     F             p t(G-1) | m2 sa     .9754555    .97807108   .00261558      .00001 |
+  |     F             p t(N-K) | m2 sa    .97520053    .97784331   .00264278      .00001 |
+  |     F               beta | m2 tq_w    .91939107     .9199519   .00056083   1.000e-06 |
+  |     F       se clustered | m2 tq_w    2.0385715    2.0391895   .00061798   .00002039 |
+  |     F           p t(G-1) | m2 tq_w    .65661365    .65651555   .00009811      .00001 |
+  |     F           p t(N-K) | m2 tq_w    .65260566    .65250617    .0000995      .00001 |
+  |     F              beta | m2 lev_w   -10.572859   -10.573929   .00106981   .00001057 |
+  |     F      se clustered | m2 lev_w     6.683621    6.6874975   .00387646   .00006687 |
+  |     F          p t(G-1) | m2 lev_w    .12861621    .12878931   .00017309      .00001 |
+  |     F          p t(N-K) | m2 lev_w    .11565824    .11583124     .000173      .00001 |
+  |     F              beta | m2 roa_w   -.06722522   -.10452356   .03729835   1.000e-06 |
+  |     F      se clustered | m2 roa_w    11.921309    11.916704   .00460417   .00011917 |
+  |     F          p t(G-1) | m2 roa_w    .99555392    .99308449   .00246942      .00001 |
+  |     F          p t(N-K) | m2 roa_w    .99550776     .9930127   .00249506      .00001 |
+  |     F           beta | m2 growth_w   -4.0816795   -4.0393632   .04231632   4.039e-06 |
+  |     F   se clustered | m2 growth_w    2.5088217    2.4706478   .03817382   .00002471 |
+  |     F       p t(G-1) | m2 growth_w    .11866453    .11696369   .00170085      .00001 |
+  |     F       p t(N-K) | m2 growth_w    .10573194    .10403968   .00169225      .00001 |
+  +--------------------------------------------------------------------------------------+
+.     di as text _newline "How to read a failure:"
+
+How to read a failure:
+.     di as text "  A  variable differs      -> definition or sample rule differs between the two pipelines: find the first variable that differs"
+  A  variable differs      -> definition or sample rule differs between the two pipelines: find the first variable that differs
+.     di as text "  B  cutoffs differ        -> quantile definition or the rows used for winsorizing differ"
+  B  cutoffs differ        -> quantile definition or the rows used for winsorizing differ
+.     di as text "  F  beta fails            -> different data, sample or variable definition (look at A and B first)"
+  F  beta fails            -> different data, sample or variable definition (look at A and B first)
+.     di as text "  F  only se / p fail      -> small-sample convention or inference choice, not the estimate"
+  F  only se / p fail      -> small-sample convention or inference choice, not the estimate
+.     di as text "  F  only p wild fails     -> compare against the Monte Carlo tolerance before concluding anything"
+  F  only p wild fails     -> compare against the Monte Carlo tolerance before concluding anything
+.     di as text "  G  RE fails, FE passes   -> RE variance-component estimator differs between software"
+  G  RE fails, FE passes   -> RE variance-component estimator differs between software
+.     di as text "  H  only RE se / p fail   -> small-sample factor of the clustered RE covariance differs (compare the two se rows)"
+  H  only RE se / p fail   -> small-sample factor of the clustered RE covariance differs (compare the two se rows)
+.     di as text "  H  RE beta fails         -> RE variance components differ (theta); check Y and the sample first (blocks A, B)"
+  H  RE beta fails         -> RE variance components differ (theta); check Y and the sample first (blocks A, B)
+. }
+
+. else {
+.     di as result _newline "ALL CHECKS PASSED: the Stata re-implementation reproduces the Python results within the stated tolerances."
+. }
+
+. foreach b in A B C D E F G H {
+  2.     capture erase "$OUT/_raw_`b'.dta"
+  3. }
+
+. di as text "Report: $OUT/crosscheck_report.csv"
+Report: /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/out/crosscheck_report.csv
+
+. log close
+      name:  <unnamed>
+       log:  /Users/tranvomanhtuan/Downloads/10_RA-Test/outputs/stata/logs/02_compare_python.log
+  log type:  text
+ closed on:   7 Nov 2026, 21:10:05
+----------------------------------------------------------------------------------------------------------------------------------------------------------------

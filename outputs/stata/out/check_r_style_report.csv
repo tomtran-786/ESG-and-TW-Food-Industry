@@ -1,0 +1,16 @@
+block,item,value,reference,n_bad,verdict,note
+B,coefficients in the Stata results,55,55,0,PASS,"9 models, 6 or 7 coefficients each"
+B,coefficients without a Python counterpart,0,0,0,PASS,same keys as 02_compare_python.do
+B,rows where plm df differs from the regression df,0,0,0,PASS,df.residual = N - k - (n + T - 1)
+B,rows (not Model 2) where Python CR1 SE differs from Stata,0,0,0,PASS,Model 2 excluded: different winsorisation
+B,rows (not Model 2) where Python default SE differs from CR0 x sqrt(N/(N-K)),0,0,0,PASS,so Python default is not plm type HC0
+B,rows where Stata CR1 SE differs from CR0 x its factor,0,0,0,PASS,"G/(G-1) x (N-1)/(N-K), K = all parameters"
+B,main-model coefficients without a second-route CR0,0,0,0,PASS,6 slopes
+B,main-model CR0: second route differs from the Mata sandwich,0,0,0,PASS,relative tolerance 1e-9
+C,"coefficients whose stars change, type HC0 (plm default)",10,,,INFO,"out of 55, against the reported CR1 and t(G-1)"
+C,"coefficients whose stars change, type sss",8,,,INFO,out of 55
+C,"coefficients whose stars change, type HC1",9,,,INFO,out of 55
+C,"SA, lagged SA or SA dummy coefficients whose stars change under any type",1,,,INFO,the coefficient the research question is about
+C,SA-type coefficients in the TESG models (mid 1 to 6),6,,,INFO,listed below
+C,main model SA: SE under HC0,12.73479738793752,,,INFO,reported CR1 SE is 14.316
+C,"main model SA: p under HC0, t(180)",.845279393697463,,,INFO,reported p is 0.8637

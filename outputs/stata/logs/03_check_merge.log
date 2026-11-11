@@ -1,0 +1,1277 @@
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/logs/03_check_merge.log
+  log type:  text
+ opened on:   7 Nov 2026, 13:14:58
+
+. di as text "Run on " c(current_date) " " c(current_time)
+Run on  7 Nov 2026 13:14:58
+
+. di as text "ROOT = $ROOT"
+ROOT = /Users/tranvomanhtuan/Downloads/10_RA-Test
+
+. 
+. *------------------------------------------------------------------------------
+. * PROGRAMS
+. *------------------------------------------------------------------------------
+. * hdrfind: name of the variable whose row-1 text (trimmed) equals the target header
+. capture program drop hdrfind
+
+. program define hdrfind, rclass
+  1.     version 14.1
+  2.     args target
+  3.     local hit ""
+  4.     local nhit 0
+  5.     foreach v of varlist _all {
+  6.         local h = ustrtrim(`v'[1])
+  7.         if `"`h'"' == `"`target'"' {
+  8.             local hit "`v'"
+  9.             local ++nhit
+ 10.         }
+ 11.     }
+ 12.     if `nhit' != 1 {
+ 13.         di as error `"Header [`target'] found `nhit' times in row 1 (expected exactly once)"'
+ 14.         exit 459
+ 15.     }
+ 16.     return local v "`hit'"
+ 17. end
+
+. 
+. * rawpick: rename the column whose header is hdr to newname
+. capture program drop rawpick
+
+. program define rawpick
+  1.     version 14.1
+  2.     args hdr newname
+  3.     hdrfind `"`hdr'"'
+  4.     local v "`r(v)'"
+  5.     rename `v' `newname'
+  6. end
+
+. 
+. * tonum: string variable -> double. Empty and "-" become missing. Any other non-numeric text stops the run.
+. capture program drop tonum
+
+. program define tonum
+  1.     version 14.1
+  2.     args v
+  3.     quietly {
+  4.         replace `v' = ustrtrim(`v')
+  5.         replace `v' = "" if `v' == "-"
+  6.         generate double `v'__n = real(`v')
+  7.         count if missing(`v'__n) & `v' != ""
+  8.         local bad = r(N)
+  9.     }
+ 10.     if `bad' > 0 {
+ 11.         di as error "tonum: `v' has `bad' cells that are neither empty, a dash nor a number"
+ 12.         list `v' if missing(`v'__n) & `v' != "", noobs
+ 13.         exit 459
+ 14.     }
+ 15.     drop `v'
+ 16.     rename `v'__n `v'
+ 17. end
+
+. 
+. * normstr: trim a string variable and read "-" as empty
+. capture program drop normstr
+
+. program define normstr
+  1.     version 14.1
+  2.     args v
+  3.     quietly replace `v' = ustrtrim(`v')
+  4.     quietly replace `v' = "" if `v' == "-"
+  5. end
+
+. 
+. * chkcount: a count that docs/data_log.md reports, against the rebuilt count
+. capture program drop chkcount
+
+. program define chkcount
+  1.     version 14.1
+  2.     args blk item got want note
+  3.     local bad = abs(`got' - `want')
+  4.     local verdict = cond(`bad' == 0, "PASS", "FAIL")
+  5.     post pf ("`blk'") ("`item'") (`got') (`want') (`bad') (.) ("`verdict'") ("`note'")
+  6.     di as text %-6s "`verdict'" " [`blk'] `item': rebuilt `got', reference `want'"
+  7. end
+
+. 
+. * chkinfo: a number reported for the reader, no verdict
+. capture program drop chkinfo
+
+. program define chkinfo
+  1.     version 14.1
+  2.     args blk item val note
+  3.     post pf ("`blk'") ("`item'") (`val') (.) (.) (.) ("INFO") ("`note'")
+  4.     di as text %-6s "INFO" " [`blk'] `item': `val'  `note'"
+  5. end
+
+. 
+. * cmp_num: rebuilt variable v against panel variable p_v (both numeric), rows present in both files
+. capture program drop cmp_num
+
+. program define cmp_num
+  1.     version 14.1
+  2.     args v
+  3.     quietly {
+  4.         count if _mm == 3
+  5.         local n = r(N)
+  6.         count if _mm == 3 & ((missing(`v') & !missing(p_`v')) | (!missing(`v') & missing(p_`v')))
+  7.         local nmiss = r(N)
+  8.         count if _mm == 3 & !missing(`v') & !missing(p_`v') & abs(`v' - p_`v') > $TOLREL * max(1, abs(`v'), abs(p_`v'))
+  9.         local nval = r(N)
+ 10.         generate double _d = abs(`v' - p_`v') if _mm == 3 & !missing(`v') & !missing(p_`v')
+ 11.         summarize _d, meanonly
+ 12.         local mx = cond(r(N) > 0, r(max), 0)
+ 13.         drop _d
+ 14.     }
+ 15.     local nbad = `nmiss' + `nval'
+ 16.     local verdict = cond(`nbad' == 0, "PASS", "FAIL")
+ 17.     post pf ("B") ("`v'") (`n') (.) (`nbad') (`mx') ("`verdict'") ("one-sided missing `nmiss'; value differences `nval'")
+ 18.     di as text %-6s "`verdict'" " [B] `v': rows `n', one-sided missing `nmiss', value differences `nval', max abs diff `mx'"
+ 19. end
+
+. 
+. * cmp_str: rebuilt string variable v against panel variable p_v, rows present in both files
+. capture program drop cmp_str
+
+. program define cmp_str
+  1.     version 14.1
+  2.     args v
+  3.     quietly {
+  4.         count if _mm == 3
+  5.         local n = r(N)
+  6.         count if _mm == 3 & ustrtrim(`v') != ustrtrim(p_`v')
+  7.         local nbad = r(N)
+  8.     }
+  9.     local verdict = cond(`nbad' == 0, "PASS", "FAIL")
+ 10.     post pf ("B") ("`v'") (`n') (.) (`nbad') (.) ("`verdict'") ("text compare, dash read as empty")
+ 11.     di as text %-6s "`verdict'" " [B] `v': rows `n', differences `nbad'"
+ 12. end
+
+. 
+. tempfile rep univ ifrs mkt tesg fx rebuilt
+
+. postfile pf str3 block str100 item double value double reference double n_bad double max_absdiff str5 verdict str240 note using "`rep'", replace
+(note: file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_01583.000001 not found)
+
+. 
+. *------------------------------------------------------------------------------
+. * BLOCK A.1  UNIVERSE (M1, M6). The sheet has one row per attribute and one column per firm.
+. *------------------------------------------------------------------------------
+. di as text _n "=== Universe ==="
+
+=== Universe ===
+
+. import excel using "$RAW/01_universe_TWSE_food.xlsx", sheet("Sheet1") allstring clear
+
+. rename A label
+
+. replace label = ustrtrim(label)
+(0 real changes made)
+
+. generate byte ord = .
+(109 missing values generated)
+
+. replace ord = 1 if label == "公司簡稱"
+(1 real change made)
+
+. replace ord = 2 if label == "TSE產業_代碼"
+(1 real change made)
+
+. replace ord = 3 if label == "設立日期"
+(1 real change made)
+
+. replace ord = 4 if label == "TSE上市日"
+(1 real change made)
+
+. replace ord = 5 if label == "下市日期"
+(1 real change made)
+
+. replace ord = 6 if label == "公司中文簡稱"
+(1 real change made)
+
+. replace ord = 7 if label == "公司英文簡稱"
+(1 real change made)
+
+. replace ord = 8 if label == "TSE 產業別"
+(1 real change made)
+
+. keep if ord < .
+(101 observations deleted)
+
+. if _N != 8 {
+.     di as error "Universe sheet: expected 8 attribute rows, found `=_N'. Check the row labels."
+.     exit 459
+. }
+
+. isid ord
+
+. drop label
+
+. ds ord, not
+B   C   D   E   F   G   H   I   J   K   L   M   N   O   P   Q   R   S   T   U   V   W   X   Y   Z   AA  AB  AC  AD  AE  AF  AG  AH  AI  AJ  AK  AL  AM  AN
+
+. local i 0
+
+. foreach v in `r(varlist)' {
+  2.     local ++i
+  3.     rename `v' val`i'
+  4. }
+
+. reshape long val, i(ord) j(col)
+(note: j = 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39)
+
+Data                               wide   ->   long
+-----------------------------------------------------------------------------
+Number of obs.                        8   ->     312
+Number of variables                  40   ->       3
+j variable (39 values)                    ->   col
+xij variables:
+                    val1 val2 ... val39   ->   val
+-----------------------------------------------------------------------------
+
+. reshape wide val, i(col) j(ord)
+(note: j = 1 2 3 4 5 6 7 8)
+
+Data                               long   ->   wide
+-----------------------------------------------------------------------------
+Number of obs.                      312   ->      39
+Number of variables                   3   ->       9
+j variable (8 values)               ord   ->   (dropped)
+xij variables:
+                                    val   ->   val1 val2 ... val8
+-----------------------------------------------------------------------------
+
+. rename val1 stock_code
+
+. rename val2 tse_code
+
+. rename val3 founding_date
+
+. rename val4 listing_date
+
+. rename val5 delist_date
+
+. rename val6 name_zh
+
+. rename val7 name_en
+
+. rename val8 tse_ind
+
+. drop col
+
+. foreach v of varlist stock_code tse_code founding_date listing_date delist_date name_zh name_en tse_ind {
+  2.     normstr `v'
+  3. }
+
+. count if stock_code == ""
+  0
+
+. if r(N) > 0 {
+.     di as error "Universe: " r(N) " firm columns without a stock code"
+.     exit 459
+. }
+
+. isid stock_code
+
+. chkcount "A" "universe: firms in file" `=_N' 39 "docs/data_log.md: 39 rows in the file"
+PASS   [A] universe: firms in file: rebuilt 39, reference 39
+
+. generate byte r1 = (tse_code == "M1200")
+
+. generate byte r2 = (tse_ind == "02") & (delist_date == "" | real(substr(delist_date, 1, 4)) >= 2016)
+
+. quietly count if r1 == 1
+
+. chkcount "A" "universe: TSE M1200 firms (rule 1)" `r(N)' 24 "TSE industry code M1200"
+PASS   [A] universe: TSE M1200 firms (rule 1): rebuilt 24, reference 24
+
+. quietly count if r1 != r2
+
+. chkcount "A" "universe: rule 1 vs rule 2 disagree" `r(N)' 0 "rule 2 = industry 02 and not delisted before 2016"
+PASS   [A] universe: rule 1 vs rule 2 disagree: rebuilt 0, reference 0
+
+. keep if r1 == 1
+(15 observations deleted)
+
+. generate double founding_year = real(substr(founding_date, 1, 4))
+
+. generate double listing_year = real(substr(listing_date, 1, 4))
+
+. keep stock_code name_zh name_en founding_date founding_year listing_date listing_year delist_date
+
+. sort stock_code
+
+. save "`univ'"
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_01583.000002 saved
+
+. 
+. *------------------------------------------------------------------------------
+. * BLOCK A.2  IFRS BASE (M2)
+. *------------------------------------------------------------------------------
+. di as text _n "=== IFRS base ==="
+
+=== IFRS base ===
+
+. import excel using "$RAW/02_ifrs_concise_annual.xlsx", sheet("Export") allstring clear
+
+. rawpick "公司" firm
+
+. rawpick "年/月" yyyymm
+
+. rawpick "合併(Y/N)" consolidated
+
+. rawpick "月份" month
+
+. rawpick "幣別" currency
+
+. rawpick "市場別" market_ifrs
+
+. rawpick "交易所主產業代碼" industry_code
+
+. rawpick "季底普通股市值" mcap_ifrs_k
+
+. rawpick "資產總額" total_assets
+
+. rawpick "流動資產" current_assets
+
+. rawpick "現金及約當現金" cash_amt
+
+. rawpick "負債總額" total_liabilities
+
+. rawpick "短期借款" st_borrowings
+
+. rawpick "長短期借款" borrowings
+
+. rawpick "非流動負債" noncurrent_liabilities
+
+. rawpick "股東權益總額" equity
+
+. rawpick "營業收入淨額" revenue
+
+. rawpick "營業毛利" gross_profit
+
+. rawpick "營業利益" operating_income
+
+. rawpick "稅前淨利" pretax_income
+
+. rawpick "合併總損益" net_income_consol
+
+. rawpick "歸屬母公司淨利（損）" net_income_parent
+
+. rawpick "財務成本" finance_cost
+
+. rawpick "來自營運之現金流量" cfo
+
+. rawpick "折舊－CFO" depreciation
+
+. rawpick "攤提－CFO" amortization
+
+. rawpick "投資活動之現金流量" cfi
+
+. generate long xl_row_ifrs = _n
+
+. keep xl_row_ifrs firm yyyymm consolidated month currency market_ifrs industry_code mcap_ifrs_k total_assets current_assets cash_amt total_liabilities st_borro
+> wings borrowings noncurrent_liabilities equity revenue gross_profit operating_income pretax_income net_income_consol net_income_parent finance_cost cfo deprec
+> iation amortization cfi
+
+. drop in 1
+(1 observation deleted)
+
+. chkcount "A" "IFRS: data rows in file" `=_N' 261 "docs/data_log.md: 261 rows"
+PASS   [A] IFRS: data rows in file: rebuilt 261, reference 261
+
+. generate str12 stock_code = substr(firm, 1, strpos(firm, "-") - 1)
+
+. count if stock_code == ""
+  0
+
+. if r(N) > 0 {
+.     di as error "IFRS: " r(N) " rows where the code before the dash could not be read"
+.     exit 459
+. }
+
+. generate double year = real(substr(yyyymm, 1, 4))
+
+. count if missing(year)
+  0
+
+. if r(N) > 0 {
+.     di as error "IFRS: " r(N) " rows where year could not be read from 年/月"
+.     exit 459
+. }
+
+. quietly count if substr(yyyymm, 5, 2) != "12"
+
+. chkcount "A" "IFRS: rows whose period is not December" `r(N)' 0 "docs/data_log.md: all month 12"
+PASS   [A] IFRS: rows whose period is not December: rebuilt 0, reference 0
+
+. foreach v in yyyymm month mcap_ifrs_k total_assets current_assets cash_amt total_liabilities st_borrowings borrowings noncurrent_liabilities equity revenue gr
+> oss_profit operating_income pretax_income net_income_consol net_income_parent finance_cost cfo depreciation amortization cfi {
+  2.     tonum `v'
+  3. }
+
+. foreach v in firm consolidated currency market_ifrs industry_code {
+  2.     normstr `v'
+  3. }
+
+. merge m:1 stock_code using "`univ'", keep(master match) gen(_mu)
+(note: variable stock_code was str12, now str145 to accommodate using data's values)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                            11
+        from master                        11  (_mu==1)
+        from using                          0  (_mu==2)
+
+    matched                               250  (_mu==3)
+    -----------------------------------------
+
+. quietly count if _mu == 1
+
+. chkcount "A" "IFRS: rows outside the 24-firm universe (dropped)" `r(N)' 11 "docs/data_log.md: 11 rows of TDR 910322"
+PASS   [A] IFRS: rows outside the 24-firm universe (dropped): rebuilt 11, reference 11
+
+. quietly count if _mu == 1 & stock_code != "910322"
+
+. chkcount "A" "IFRS: dropped rows that are not TDR 910322" `r(N)' 0 "only the TDR may be dropped"
+PASS   [A] IFRS: dropped rows that are not TDR 910322: rebuilt 0, reference 0
+
+. drop if _mu == 1
+(11 observations deleted)
+
+. drop _mu
+
+. chkcount "A" "IFRS: base rows after the universe filter" `=_N' 250 "docs/data_log.md: 250 rows"
+PASS   [A] IFRS: base rows after the universe filter: rebuilt 250, reference 250
+
+. bysort stock_code year: generate byte _dup = (_N > 1)
+
+. quietly count if _dup == 1
+
+. chkcount "A" "IFRS: duplicated (stock_code, year)" `r(N)' 0 "key must be unique"
+PASS   [A] IFRS: duplicated (stock_code, year): rebuilt 0, reference 0
+
+. drop _dup
+
+. generate double idgap = total_assets - total_liabilities - equity
+
+. quietly count if abs(idgap) > 0.5
+
+. chkcount "D" "IFRS: rows where assets differ from liabilities plus equity" `r(N)' 0 "docs/data_log.md: identity holds in all 250 rows"
+PASS   [D] IFRS: rows where assets differ from liabilities plus equity: rebuilt 0, reference 0
+
+. drop idgap
+
+. save "`ifrs'"
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_01583.000003 saved
+
+. 
+. *------------------------------------------------------------------------------
+. * BLOCK A.3  MARKET, MONTHLY DECEMBER FILE (M3)
+. *------------------------------------------------------------------------------
+. di as text _n "=== Market ==="
+
+=== Market ===
+
+. import excel using "$RAW/04_market_data_monthly_dec.xlsx", sheet("Export") allstring clear
+
+. rawpick "證券代碼" code_raw
+
+. rawpick "年月" ym
+
+. rawpick "收盤價(元)" price
+
+. rawpick "流通在外股數(千股)" shares_k
+
+. rawpick "市值(百萬元)" mcap_m
+
+. rawpick "市場別" market_mkt
+
+. rawpick "該月結束日" month_end_date
+
+. generate long xl_row_mkt = _n
+
+. keep xl_row_mkt code_raw ym price shares_k mcap_m market_mkt month_end_date
+
+. drop in 1
+(1 observation deleted)
+
+. generate str12 stock_code = substr(code_raw, 1, strpos(code_raw, "-") - 1)
+
+. generate double year = real(substr(ym, 1, 4))
+
+. quietly count if substr(ym, 5, 2) != "12"
+
+. chkcount "A" "market: rows whose month is not December" `r(N)' 0 "monthly file holds December only"
+PASS   [A] market: rows whose month is not December: rebuilt 0, reference 0
+
+. merge m:1 stock_code using "`univ'", keep(master match) gen(_mu)
+(note: variable stock_code was str12, now str145 to accommodate using data's values)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                            11
+        from master                        11  (_mu==1)
+        from using                          0  (_mu==2)
+
+    matched                               246  (_mu==3)
+    -----------------------------------------
+
+. quietly count if _mu == 1 & stock_code != "910322"
+
+. chkcount "A" "market: dropped rows that are not TDR 910322" `r(N)' 0 "only the TDR may be dropped"
+PASS   [A] market: dropped rows that are not TDR 910322: rebuilt 0, reference 0
+
+. drop if _mu == 1
+(11 observations deleted)
+
+. drop _mu
+
+. foreach v in price shares_k mcap_m month_end_date {
+  2.     tonum `v'
+  3. }
+
+. normstr market_mkt
+
+. bysort stock_code year: generate byte _dup = (_N > 1)
+
+. quietly count if _dup == 1
+
+. chkcount "A" "market: duplicated (stock_code, year)" `r(N)' 0 "key must be unique"
+PASS   [A] market: duplicated (stock_code, year): rebuilt 0, reference 0
+
+. keep stock_code year price shares_k mcap_m market_mkt month_end_date xl_row_mkt
+
+. sort stock_code year
+
+. save "`mkt'"
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_01583.000004 saved
+
+. 
+. *------------------------------------------------------------------------------
+. * BLOCK A.4 and C  TESG (M4)
+. *------------------------------------------------------------------------------
+. di as text _n "=== TESG ==="
+
+=== TESG ===
+
+. import excel using "$RAW/03_tesg_score.xlsx", sheet("Export") allstring clear
+
+. rawpick "公司代碼" code_raw
+
+. rawpick "TESG評等季度" rating_quarter
+
+. rawpick "TESG評等公告日" rating_date
+
+. rawpick "採用永續報告書年度" rep_year
+
+. rawpick "採用永續報告書是否驗證" assured
+
+. rawpick "TESG等級" tesg_grade
+
+. rawpick "TESG分數" tesg
+
+. rawpick "環境構面分數" e
+
+. rawpick "社會構面分數" s
+
+. rawpick "公司治理構面分數" g
+
+. rawpick "事件雷達轉換計分" event_radar
+
+. generate long xl_row_tesg = _n
+
+. keep xl_row_tesg code_raw rating_quarter rating_date rep_year assured tesg_grade tesg e s g event_radar
+
+. drop in 1
+(1 observation deleted)
+
+. generate str12 stock_code = substr(code_raw, 1, strpos(code_raw, "-") - 1)
+
+. chkcount "A" "TESG: data rows in file" `=_N' 336 "docs/data_log.md: 336 rows"
+PASS   [A] TESG: data rows in file: rebuilt 336, reference 336
+
+. generate str2 rq_month = substr(rating_quarter, 5, 2)
+
+. quietly count if rq_month == "06"
+
+. chkcount "A" "TESG: June rating rows (dropped)" `r(N)' 91 "docs/data_log.md: 91 June ratings"
+PASS   [A] TESG: June rating rows (dropped): rebuilt 91, reference 91
+
+. quietly count if rq_month != "06" & rq_month != "12"
+
+. chkcount "A" "TESG: rows that are neither June nor December" `r(N)' 0 "only two rating months exist"
+PASS   [A] TESG: rows that are neither June nor December: rebuilt 0, reference 0
+
+. keep if rq_month == "12"
+(91 observations deleted)
+
+. chkcount "A" "TESG: December rating rows" `=_N' 245 "336 minus 91"
+PASS   [A] TESG: December rating rows: rebuilt 245, reference 245
+
+. replace rep_year = ustrtrim(rep_year)
+(0 real changes made)
+
+. generate double ry = real(rep_year)
+(1 missing value generated)
+
+. quietly count if missing(ry)
+
+. chkcount "A" "TESG: December ratings with no report year (dropped)" `r(N)' 1 "docs/data_log.md: 7780 rating 2025/12"
+PASS   [A] TESG: December ratings with no report year (dropped): rebuilt 1, reference 1
+
+. * Block C: relation between rating year and report year, December ratings that have a report year
+. generate double rqy = real(substr(rating_quarter, 1, 4))
+
+. generate double yr_gap = rqy - ry
+(1 missing value generated)
+
+. di as text _n "Block C: rating-quarter year minus report year (December ratings with a report year)"
+
+Block C: rating-quarter year minus report year (December ratings with a report year)
+
+. tabulate yr_gap, missing
+
+     yr_gap |      Freq.     Percent        Cum.
+------------+-----------------------------------
+          1 |        244       99.59       99.59
+          . |          1        0.41      100.00
+------------+-----------------------------------
+      Total |        245      100.00
+
+. quietly count if yr_gap == 1
+
+. chkinfo "C" "TESG: December ratings where rating year = report year + 1" `r(N)' "every rating that has a report year; keying on rating year would shift each s
+> core by one year"
+INFO   [C] TESG: December ratings where rating year = report year + 1: 244  every rating that has a report year; keying on rating year would shift each score by
+>  one year
+
+. quietly count if yr_gap != 1 & !missing(yr_gap)
+
+. chkinfo "C" "TESG: December ratings where the gap is not 1" `r(N)' "0 means a uniform one-year gap"
+INFO   [C] TESG: December ratings where the gap is not 1: 0  0 means a uniform one-year gap
+
+. quietly count if ry == 2015
+
+. chkcount "A" "TESG: December ratings with report year 2015 (dropped)" `r(N)' 22 "docs/data_log.md: 2015 TESG not used"
+PASS   [A] TESG: December ratings with report year 2015 (dropped): rebuilt 22, reference 22
+
+. keep if ry >= 2016 & ry < .
+(23 observations deleted)
+
+. chkcount "A" "TESG: rows kept, keyed on report year" `=_N' 222 "docs/data_log.md: 222 rows"
+PASS   [A] TESG: rows kept, keyed on report year: rebuilt 222, reference 222
+
+. generate double year = ry
+
+. merge m:1 stock_code using "`univ'", keep(master match) gen(_mu)
+(note: variable stock_code was str12, now str145 to accommodate using data's values)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                               222  (_mu==3)
+    -----------------------------------------
+
+. quietly count if _mu == 1
+
+. chkcount "A" "TESG: rows whose firm is outside the universe" `r(N)' 0 "TESG file has no TDR"
+PASS   [A] TESG: rows whose firm is outside the universe: rebuilt 0, reference 0
+
+. drop if _mu == 1
+(0 observations deleted)
+
+. drop _mu
+
+. bysort stock_code year: generate byte _dup = (_N > 1)
+
+. quietly count if _dup == 1
+
+. chkcount "A" "TESG: duplicated (stock_code, report year)" `r(N)' 0 "key must be unique after the rules"
+PASS   [A] TESG: duplicated (stock_code, report year): rebuilt 0, reference 0
+
+. foreach v in rating_quarter rating_date tesg e s g event_radar {
+  2.     tonum `v'
+  3. }
+
+. normstr assured
+
+. normstr tesg_grade
+
+. keep stock_code year xl_row_tesg rating_quarter rating_date assured tesg_grade tesg e s g event_radar
+
+. sort stock_code year
+
+. save "`tesg'"
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_01583.000005 saved
+
+. 
+. *------------------------------------------------------------------------------
+. * BLOCK A.5  FX (M5)
+. *------------------------------------------------------------------------------
+. di as text _n "=== FX ==="
+
+=== FX ===
+
+. import excel using "$RAW/05_fx_usd_ntd_annual_avg.xlsx", sheet("Sheet1") allstring clear
+
+. rawpick "年月" ym
+
+. rawpick "數值" usd_ntd
+
+. generate long xl_row_fx = _n
+
+. keep xl_row_fx ym usd_ntd
+
+. drop in 1
+(1 observation deleted)
+
+. generate double year = real(substr(ym, 1, 4))
+
+. quietly count if substr(ym, 5, 3) != "/12"
+
+. chkcount "A" "FX: rows whose period is not /12" `r(N)' 0 "annual series, December label"
+PASS   [A] FX: rows whose period is not /12: rebuilt 0, reference 0
+
+. tonum usd_ntd
+
+. chkcount "A" "FX: annual values in file" `=_N' 11 "docs/data_log.md: 11 annual values 2015-2025"
+PASS   [A] FX: annual values in file: rebuilt 11, reference 11
+
+. isid year
+
+. keep year usd_ntd xl_row_fx
+
+. sort year
+
+. save "`fx'"
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_01583.000006 saved
+
+. 
+. *------------------------------------------------------------------------------
+. * BLOCK A.6  ASSEMBLE THE PANEL AND THE FLAGS (M7)
+. *------------------------------------------------------------------------------
+. di as text _n "=== Assemble ==="
+
+=== Assemble ===
+
+. use "`ifrs'", clear
+
+. merge 1:1 stock_code year using "`mkt'", keep(master match) gen(_mm_mkt)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             4
+        from master                         4  (_mm_mkt==1)
+        from using                          0  (_mm_mkt==2)
+
+    matched                               246  (_mm_mkt==3)
+    -----------------------------------------
+
+. quietly count if _mm_mkt == 3
+
+. chkcount "A" "join: base rows matched in the market file" `r(N)' 246 "docs/data_log.md: 246 of 250, the 4 unmatched are 7780 and 7791 in 2022-2023"
+PASS   [A] join: base rows matched in the market file: rebuilt 246, reference 246
+
+. merge 1:1 stock_code year using "`tesg'", keep(master match) gen(_mm_tesg)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                            28
+        from master                        28  (_mm_tesg==1)
+        from using                          0  (_mm_tesg==2)
+
+    matched                               222  (_mm_tesg==3)
+    -----------------------------------------
+
+. quietly count if _mm_tesg == 3
+
+. chkcount "A" "join: base rows matched in the TESG file" `r(N)' 222 "docs/data_log.md: 222 of 250"
+PASS   [A] join: base rows matched in the TESG file: rebuilt 222, reference 222
+
+. merge m:1 year using "`fx'", keep(master match) gen(_mm_fx)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                               250  (_mm_fx==3)
+    -----------------------------------------
+
+. quietly count if _mm_fx == 3
+
+. chkcount "A" "join: base rows matched in the FX file" `r(N)' 250 "every year 2015-2025 has a rate"
+PASS   [A] join: base rows matched in the FX file: rebuilt 250, reference 250
+
+. drop _mm_mkt _mm_tesg _mm_fx
+
+. quietly summarize year
+
+. if r(min) < 2015 | r(max) > 2025 {
+.     di as error "Years outside 2015-2025 in the base"
+.     exit 459
+. }
+
+. generate byte lag_only = (year == 2015)
+
+. generate str20 excl_reason = ""
+(250 missing values generated)
+
+. replace excl_reason = "tesg_missing" if missing(tesg)
+(31 real changes made)
+
+. replace excl_reason = "equity_le_0" if equity <= 0 | missing(equity)
+(0 real changes made)
+
+. replace excl_reason = "not_TSE" if market_ifrs != "TSE"
+(7 real changes made)
+
+. replace excl_reason = "lag_only_2015" if year == 2015
+(22 real changes made)
+
+. generate byte in_sample = (excl_reason == "")
+
+. quietly count if lag_only == 1
+
+. chkcount "A" "flags: lag_only rows" `r(N)' 22 "docs/data_log.md: 22 rows of 2015"
+PASS   [A] flags: lag_only rows: rebuilt 22, reference 22
+
+. quietly count if excl_reason == "not_TSE"
+
+. chkcount "A" "flags: excluded as not_TSE" `r(N)' 6 "docs/data_log.md: attrition 250 to 228 to 222"
+PASS   [A] flags: excluded as not_TSE: rebuilt 6, reference 6
+
+. quietly count if excl_reason == "equity_le_0"
+
+. chkcount "A" "flags: excluded as equity_le_0" `r(N)' 0 "docs/data_log.md: equity > 0 in every row"
+PASS   [A] flags: excluded as equity_le_0: rebuilt 0, reference 0
+
+. quietly count if excl_reason == "tesg_missing"
+
+. chkcount "A" "flags: excluded as tesg_missing" `r(N)' 3 "docs/data_log.md: 3 rows graded W*, 1218 1219 1225 in 2025"
+PASS   [A] flags: excluded as tesg_missing: rebuilt 3, reference 3
+
+. quietly count if in_sample == 1
+
+. chkcount "A" "flags: in_sample rows" `r(N)' 219 "docs/data_log.md: N = 219"
+PASS   [A] flags: in_sample rows: rebuilt 219, reference 219
+
+. quietly count if in_sample == 1 & year >= 2016 & year <= 2024
+
+. chkcount "A" "flags: in_sample rows 2016-2024" `r(N)' 198 "22 firms x 9 years"
+PASS   [A] flags: in_sample rows 2016-2024: rebuilt 198, reference 198
+
+. quietly count if in_sample == 1 & year == 2025
+
+. chkcount "A" "flags: in_sample rows 2025" `r(N)' 21 "docs/data_log.md: 21 firms in 2025"
+PASS   [A] flags: in_sample rows 2025: rebuilt 21, reference 21
+
+. preserve
+
+. keep if in_sample == 1
+(31 observations deleted)
+
+. contract stock_code
+
+. chkcount "A" "flags: firms with at least one in_sample row" `=_N' 24 "docs/data_log.md: 24 firms"
+PASS   [A] flags: firms with at least one in_sample row: rebuilt 24, reference 24
+
+. restore
+
+. generate double mratio = mcap_ifrs_k / (mcap_m * 1000)
+(4 missing values generated)
+
+. quietly summarize mratio
+
+. chkinfo "D" "IFRS market value / (market file value x 1000): minimum" `r(min)' "docs/data_log.md: 0.9993"
+INFO   [D] IFRS market value / (market file value x 1000): minimum: .9992876712328768  docs/data_log.md: 0.9993
+
+. chkinfo "D" "IFRS market value / (market file value x 1000): maximum" `r(max)' "docs/data_log.md: 1.0013"
+INFO   [D] IFRS market value / (market file value x 1000): maximum: 1.001282485875706  docs/data_log.md: 1.0013
+
+. drop mratio
+
+. sort stock_code year
+
+. save "`rebuilt'"
+file /var/folders/m5/m62mtz3d5172h5lxcfxt6ff40000gn/T//S_01583.000007 saved
+
+. save "$OUT/panel_rebuilt_from_raw.dta", replace
+(note: file /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/out/panel_rebuilt_from_raw.dta not found)
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/out/panel_rebuilt_from_raw.dta saved
+
+. 
+. *------------------------------------------------------------------------------
+. * BLOCK E  SECOND MARKET SOURCE: the annual file must agree with the monthly December file
+. *------------------------------------------------------------------------------
+. di as text _n "=== Market, annual file against monthly December file ==="
+
+=== Market, annual file against monthly December file ===
+
+. import excel using "$RAW/04_market_data.xlsx", sheet("Export") allstring clear
+
+. rawpick "證券代碼" code_raw
+
+. rawpick "年月" ym
+
+. rawpick "收盤價(元)" a_price
+
+. rawpick "流通在外股數(千股)" a_shares_k
+
+. rawpick "市值(百萬元)" a_mcap_m
+
+. keep code_raw ym a_price a_shares_k a_mcap_m
+
+. drop in 1
+(1 observation deleted)
+
+. generate str12 stock_code = substr(code_raw, 1, strpos(code_raw, "-") - 1)
+
+. generate double year = real(substr(ym, 1, 4))
+
+. foreach v in a_price a_shares_k a_mcap_m {
+  2.     tonum `v'
+  3. }
+
+. merge 1:1 stock_code year using "`mkt'", keep(match) gen(_ma)
+(note: variable stock_code was str12, now str145 to accommodate using data's values)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                               222  (_ma==3)
+    -----------------------------------------
+
+. quietly count
+
+. local novl = r(N)
+
+. chkinfo "E" "market: rows present in both market files (24 firms)" `novl' "docs/data_log.md: 232 overlapping rows incl. the TDR; compare below"
+INFO   [E] market: rows present in both market files (24 firms): 222  docs/data_log.md: 232 overlapping rows incl. the TDR; compare below
+
+. generate byte _bad = 0
+
+. foreach pair in "a_price price" "a_shares_k shares_k" "a_mcap_m mcap_m" {
+  2.     local a : word 1 of `pair'
+  3.     local b : word 2 of `pair'
+  4.     replace _bad = 1 if (missing(`a') != missing(`b')) | (!missing(`a') & !missing(`b') & abs(`a' - `b') > $TOLREL * max(1, abs(`b')))
+  5. }
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+
+. quietly count if _bad == 1
+
+. chkcount "E" "market: overlapping rows where price, shares or value differ" `r(N)' 0 "docs/data_log.md: the two files agree exactly"
+PASS   [E] market: overlapping rows where price, shares or value differ: rebuilt 0, reference 0
+
+. 
+. *------------------------------------------------------------------------------
+. * BLOCK B  CELL-BY-CELL COMPARISON WITH panel_merged.csv
+. *------------------------------------------------------------------------------
+. di as text _n "=== Compare with data_clean/panel_merged.csv ==="
+
+=== Compare with data_clean/panel_merged.csv ===
+
+. import delimited using "$ROOT/data_clean/panel_merged.csv", clear varnames(1) stringcols(1/54) encoding("utf-8")
+(54 vars, 250 obs)
+
+. quietly describe
+
+. if r(k) != 54 {
+.     di as error "panel_merged.csv has " r(k) " columns, this file expects 54. Update stringcols() and the variable lists."
+.     exit 459
+. }
+
+. generate double yr_ = real(year)
+
+. drop year
+
+. rename yr_ year
+
+. ds stock_code year, not
+in_sample     firm          market_ifrs   cash_amt      equity        net_income~l  amortization  market_mkt    tesg_grade    event_radar   delist_date
+lag_only      yyyymm        industry_c~e  total_liab~s  revenue       net_income~t  cfi           month_end_~e  tesg          founding_d~e  usd_ntd
+excl_reason   consolidated  mcap_ifrs_k   st_borrowi~s  gross_profit  finance_cost  price         rating_qua~r  e             founding_y~r
+name_zh       month         total_assets  borrowings    operating_~e  cfo           shares_k      rating_date   s             listing_date
+name_en       currency      current_as~s  noncurrent~s  pretax_inc~e  depreciation  mcap_m        assured       g             listing_year
+
+. foreach v in `r(varlist)' {
+  2.     rename `v' p_`v'
+  3. }
+
+. merge 1:1 stock_code year using "`rebuilt'", gen(_mm)
+(note: variable stock_code was str4, now str145 to accommodate using data's values)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                               250  (_mm==3)
+    -----------------------------------------
+
+. 
+. local numvars in_sample lag_only yyyymm month mcap_ifrs_k total_assets current_assets cash_amt total_liabilities st_borrowings borrowings noncurrent_liabiliti
+> es equity revenue gross_profit operating_income pretax_income net_income_consol net_income_parent finance_cost cfo depreciation amortization cfi price shares_
+> k mcap_m month_end_date rating_quarter rating_date tesg e s g event_radar founding_year listing_year usd_ntd
+
+. local strvars name_zh name_en firm consolidated currency market_ifrs industry_code market_mkt assured tesg_grade founding_date listing_date delist_date excl_r
+> eason
+
+. 
+. quietly count if _mm == 1
+
+. chkcount "B" "rows only in panel_merged.csv" `r(N)' 0 "key (stock_code, year)"
+PASS   [B] rows only in panel_merged.csv: rebuilt 0, reference 0
+
+. quietly count if _mm == 2
+
+. chkcount "B" "rows only in the rebuilt panel" `r(N)' 0 "key (stock_code, year)"
+PASS   [B] rows only in the rebuilt panel: rebuilt 0, reference 0
+
+. quietly count if _mm == 3
+
+. chkcount "B" "rows in both" `r(N)' 250 "250 firm-years"
+PASS   [B] rows in both: rebuilt 250, reference 250
+
+. 
+. local missingvars ""
+
+. foreach pv of varlist p_* {
+  2.     local nm = substr("`pv'", 3, .)
+  3.     local in1 : list nm in numvars
+  4.     local in2 : list nm in strvars
+  5.     if `in1' == 0 & `in2' == 0 {
+  6.         local missingvars "`missingvars' `nm'"
+  7.     }
+  8. }
+
+. local nmissing : word count `missingvars'
+
+. chkcount "B" "panel columns not covered by this comparison" `nmissing' 0 "`missingvars'"
+PASS   [B] panel columns not covered by this comparison: rebuilt 0, reference 0
+
+. local ncov : word count `numvars' `strvars'
+
+. chkcount "B" "columns compared (all except the two keys)" `ncov' 52 "54 columns minus stock_code and year"
+PASS   [B] columns compared (all except the two keys): rebuilt 52, reference 52
+
+. 
+. foreach v of local numvars {
+  2.     tonum p_`v'
+  3. }
+
+. foreach v of local numvars {
+  2.     cmp_num `v'
+  3. }
+PASS   [B] in_sample: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] lag_only: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] yyyymm: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] month: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] mcap_ifrs_k: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] total_assets: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] current_assets: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] cash_amt: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] total_liabilities: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] st_borrowings: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] borrowings: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] noncurrent_liabilities: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] equity: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] revenue: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] gross_profit: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] operating_income: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] pretax_income: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] net_income_consol: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] net_income_parent: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] finance_cost: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] cfo: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] depreciation: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] amortization: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] cfi: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] price: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] shares_k: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] mcap_m: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] month_end_date: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] rating_quarter: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] rating_date: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] tesg: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] e: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] s: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] g: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] event_radar: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] founding_year: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] listing_year: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+PASS   [B] usd_ntd: rows 250, one-sided missing 0, value differences 0, max abs diff 0
+
+. foreach v of local strvars {
+  2.     cmp_str `v'
+  3. }
+PASS   [B] name_zh: rows 250, differences 0
+PASS   [B] name_en: rows 250, differences 0
+PASS   [B] firm: rows 250, differences 0
+PASS   [B] consolidated: rows 250, differences 0
+PASS   [B] currency: rows 250, differences 0
+PASS   [B] market_ifrs: rows 250, differences 0
+PASS   [B] industry_code: rows 250, differences 0
+PASS   [B] market_mkt: rows 250, differences 0
+PASS   [B] assured: rows 250, differences 0
+PASS   [B] tesg_grade: rows 250, differences 0
+PASS   [B] founding_date: rows 250, differences 0
+PASS   [B] listing_date: rows 250, differences 0
+PASS   [B] delist_date: rows 250, differences 0
+PASS   [B] excl_reason: rows 250, differences 0
+
+. 
+. *------------------------------------------------------------------------------
+. * BLOCK F  SPOT ROWS: twelve firm-years with the Excel row numbers, to check by hand
+. *------------------------------------------------------------------------------
+. generate byte spot = 0
+
+. foreach pair in "1201 2016" "1216 2017" "1256 2016" "1218 2025" "7780 2025" "7791 2025" "1229 2019" "1737 2024" "1213 2023" "1702 2021" "1233 2018" "1203 2020
+> " {
+  2.     local c : word 1 of `pair'
+  3.     local y : word 2 of `pair'
+  4.     replace spot = 1 if stock_code == "`c'" & year == `y'
+  5. }
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+
+. quietly count if spot == 1
+
+. chkcount "F" "spot rows found in both files" `r(N)' 12 "12 firm-years chosen to cover the key cases"
+PASS   [F] spot rows found in both files: rebuilt 12, reference 12
+
+. di as text _n "Spot rows: Excel row numbers in the raw files (row 1 = header), rebuilt value, panel value"
+
+Spot rows: Excel row numbers in the raw files (row 1 = header), rebuilt value, panel value
+
+. sort stock_code year
+
+. list stock_code year xl_row_ifrs xl_row_mkt xl_row_tesg xl_row_fx if spot == 1, noobs sep(0)
+
+  +-------------------------------------------------------------+
+  | stock_~e   year   xl_row~s   xl_row~t   xl_row~g   xl_row~x |
+  |-------------------------------------------------------------|
+  |     1201   2016         11         11         15         11 |
+  |     1203   2020         18         18         26          7 |
+  |     1213   2023         37         37         51          4 |
+  |     1216   2017         65         65         89         10 |
+  |     1218   2025         79         79        107          2 |
+  |     1229   2019        140        140        192          8 |
+  |     1233   2018        174        174        238          9 |
+  |     1256   2016        220        220        300         11 |
+  |     1702   2021        226        226        310          6 |
+  |     1737   2024        234        234        319          3 |
+  |     7780   2025        244        244        332          2 |
+  |     7791   2025        248        246        336          2 |
+  +-------------------------------------------------------------+
+
+. list stock_code year rating_quarter p_rating_quarter tesg p_tesg e p_e usd_ntd p_usd_ntd if spot == 1, noobs sep(0)
+
+  +---------------------------------------------------------------------------------------------+
+  | stock_~e   year   rating~r   p_rati~r    tesg   p_tesg       e     p_e   usd_ntd   p_usd_~d |
+  |---------------------------------------------------------------------------------------------|
+  |     1201   2016     201712     201712   62.65    62.65   48.15   48.15   32.3011    32.3011 |
+  |     1203   2020     202112     202112    64.1     64.1    63.4    63.4   29.5675    29.5675 |
+  |     1213   2023     202412     202412   39.95    39.95    32.1    32.1   31.1782    31.1782 |
+  |     1216   2017     201812     201812   74.48    74.48    78.2    78.2   30.4212    30.4212 |
+  |     1218   2025     202612     202612       .        .       .       .   31.1442    31.1442 |
+  |     1229   2019     202012     202012   68.31    68.31   66.46   66.46   30.9239    30.9239 |
+  |     1233   2018     201912     201912    62.1     62.1   57.42   57.42   30.1886    30.1886 |
+  |     1256   2016     201712     201712   52.65    52.65   65.34   65.34   32.3011    32.3011 |
+  |     1702   2021     202212     202212   56.23    56.23    57.6    57.6   28.0132    28.0132 |
+  |     1737   2024     202512     202512   62.35    62.35   46.97   46.97   32.1221    32.1221 |
+  |     7780   2025     202612     202612   57.61    57.61   73.51   73.51   31.1442    31.1442 |
+  |     7791   2025     202612     202612   50.13    50.13    31.9    31.9   31.1442    31.1442 |
+  +---------------------------------------------------------------------------------------------+
+
+. list stock_code year founding_year p_founding_year total_assets p_total_assets mcap_m p_mcap_m price p_price if spot == 1, noobs sep(0)
+
+  +-----------------------------------------------------------------------------------------------------+
+  | stock_~e   year   foundi~r   p_foun~r   total_a~s   p_tota~ts   mcap_m   p_mcap_m   price   p_price |
+  |-----------------------------------------------------------------------------------------------------|
+  |     1201   2016       1953       1953    33867933    33867933     8856       8856    17.5      17.5 |
+  |     1203   2020       1959       1959     9331602     9331602     8784       8784    36.6      36.6 |
+  |     1213   2023       1965       1965      819325      819325      392        392    6.92      6.92 |
+  |     1216   2017       1967       1967   4.147e+08   4.147e+08   375013     375013      66        66 |
+  |     1218   2025       1950       1950    14521956    14521956     9100       9100    18.2      18.2 |
+  |     1229   2019       1955       1955    46544943    46544943    40820      40820   36.95     36.95 |
+  |     1233   2018       1975       1975     2169779     2169779     3447       3447   38.05     38.05 |
+  |     1256   2016       2010       2010     1731289     1731289     3328       3328   122.5     122.5 |
+  |     1702   2021       1950       1950    29413868    29413868    14765      14765    50.2      50.2 |
+  |     1737   2024       1995       1995     8381173     8381173     6490       6490   32.45     32.45 |
+  |     7780   2025       2018       2018     5912651     5912651    14540      14540   179.5     179.5 |
+  |     7791   2025       1986       1986     4197458     4197458     5816       5816    72.7      72.7 |
+  +-----------------------------------------------------------------------------------------------------+
+
+. export delimited stock_code year xl_row_ifrs xl_row_mkt xl_row_tesg xl_row_fx rating_quarter p_rating_quarter tesg p_tesg usd_ntd p_usd_ntd founding_year p_fo
+> unding_year total_assets p_total_assets mcap_m p_mcap_m price p_price if spot == 1 using "$OUT/check_merge_spotrows.csv", replace
+(note: file /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/out/check_merge_spotrows.csv not found)
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/out/check_merge_spotrows.csv saved
+
+. 
+. *------------------------------------------------------------------------------
+. * REPORT
+. *------------------------------------------------------------------------------
+. postclose pf
+
+. use "`rep'", clear
+
+. export delimited using "$OUT/check_merge_report.csv", replace
+(note: file /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/out/check_merge_report.csv not found)
+file /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/out/check_merge_report.csv saved
+
+. quietly count if verdict == "PASS"
+
+. local npass = r(N)
+
+. quietly count if verdict == "FAIL"
+
+. local nfail = r(N)
+
+. quietly count if verdict == "INFO"
+
+. local ninfo = r(N)
+
+. di as text _n "=============================================================="
+
+==============================================================
+
+. di as text "SUMMARY: PASS `npass', FAIL `nfail', INFO `ninfo'"
+SUMMARY: PASS 94, FAIL 0, INFO 5
+
+. if `nfail' == 0 {
+.     di as result "Every check passed: the panel rebuilt from the raw TEJ files equals panel_merged.csv."
+Every check passed: the panel rebuilt from the raw TEJ files equals panel_merged.csv.
+. }
+
+. else {
+.     di as error "`nfail' check(s) failed. They are listed below; send the log back."
+.     list block item value reference n_bad max_absdiff note if verdict == "FAIL", noobs sep(0) abbreviate(24)
+. }
+
+. di as text "Report : $OUT/check_merge_report.csv"
+Report : /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/out/check_merge_report.csv
+
+. di as text "Spot rows : $OUT/check_merge_spotrows.csv"
+Spot rows : /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/out/check_merge_spotrows.csv
+
+. di as text "Rebuilt panel : $OUT/panel_rebuilt_from_raw.dta"
+Rebuilt panel : /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/out/panel_rebuilt_from_raw.dta
+
+. log close
+      name:  <unnamed>
+       log:  /Users/tranvomanhtuan/Downloads/10_RA-Test/stata/logs/03_check_merge.log
+  log type:  text
+ closed on:   7 Nov 2026, 13:15:00
+----------------------------------------------------------------------------------------------------------------------------------------------------------------

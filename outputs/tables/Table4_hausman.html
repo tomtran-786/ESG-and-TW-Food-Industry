@@ -1,0 +1,88 @@
+<html><head><meta charset='utf-8'><style>body{font-family:Georgia,serif;margin:2em}table.t{border-collapse:collapse;border-top:2px solid #000;border-bottom:2px solid #000}table.t th,table.t td{padding:3px 10px;text-align:right}table.t thead tr{border-bottom:1px solid #000}table.t th:first-child,table.t td:first-child{text-align:left}.n{font-size:.85em;max-width:60em}</style></head><body><h2>Table 4 (supplement): Hausman and Mundlak Tests, FE vs RE (brief §3.2)</h2><h3>Coefficients</h3><table class="dataframe t">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>FE (firm FE + year dummies)</th>
+      <th>RE (year dummies)</th>
+      <th>Difference</th>
+      <th>SE FE</th>
+      <th>SE RE</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>SA Index</th>
+      <td>2.2446</td>
+      <td>-4.8048</td>
+      <td>7.0493</td>
+      <td>6.5636</td>
+      <td>2.1338</td>
+    </tr>
+    <tr>
+      <th>ROA</th>
+      <td>1.0480</td>
+      <td>3.9950</td>
+      <td>-2.9470</td>
+      <td>11.2311</td>
+      <td>10.9223</td>
+    </tr>
+    <tr>
+      <th>LEV</th>
+      <td>-8.8515</td>
+      <td>-7.3271</td>
+      <td>-1.5244</td>
+      <td>4.1856</td>
+      <td>3.9725</td>
+    </tr>
+    <tr>
+      <th>TQ</th>
+      <td>0.7927</td>
+      <td>0.8510</td>
+      <td>-0.0583</td>
+      <td>0.8874</td>
+      <td>0.8627</td>
+    </tr>
+    <tr>
+      <th>GROWTH</th>
+      <td>-3.5995</td>
+      <td>-3.3011</td>
+      <td>-0.2984</td>
+      <td>2.3762</td>
+      <td>2.3029</td>
+    </tr>
+    <tr>
+      <th>CASH</th>
+      <td>7.3289</td>
+      <td>8.7125</td>
+      <td>-1.3836</td>
+      <td>6.4640</td>
+      <td>6.1696</td>
+    </tr>
+  </tbody>
+</table><h3>Tests</h3><table class="dataframe t">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>Statistic</th>
+      <th>df</th>
+      <th>p-value</th>
+      <th>Note</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>Hausman (classic)</th>
+      <td>2.9411</td>
+      <td>6</td>
+      <td>0.8162</td>
+      <td>min eigenvalue of V_FE - V_RE = 2.642e-02; valid = True</td>
+    </tr>
+    <tr>
+      <th>Mundlak</th>
+      <td>3.2540</td>
+      <td>6</td>
+      <td>0.7764</td>
+      <td>firm means of the 6 regressors, RE, firm-clustered (G/(G-1) x (N-1)/(N-K)) Wald test</td>
+    </tr>
+  </tbody>
+</table><p class='n'>FE: firm fixed effects plus year dummies; RE: random firm effects plus year dummies; both with the conventional (non-robust) covariance, as the classic Hausman test requires. H = b&#x27;(V_FE - V_RE)^-1 b over the six slopes, df = 6.<br>Mundlak: random-effects regression adding the firm means of the six regressors, firm-clustered with the G/(G-1) x (N-1)/(N-K) factor; Wald test that the six mean coefficients are jointly zero. Rejection means the firm effects are correlated with the regressors (FE preferred).<br>Decision rule from brief §3.2: p &lt; 0.05 -&gt; fixed effects. The main model is the two-way FE of brief §3.3.<br>Source: TEJ; own calculations.</p></body></html>
